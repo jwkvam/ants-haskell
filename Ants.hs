@@ -48,10 +48,10 @@ rowBound = row . snd . bounds
 
 (%!%) :: World -> Point -> Point
 (%!%) w p = 
-  let modCol = 1 + (colBound w)
-      modRow = 1 + (rowBound w)
-      ixCol  = (col p) `mod` modCol
-      ixRow  = (row p) `mod` modRow
+  let modCol = 1 + colBound w
+      modRow = 1 + rowBound w
+      ixCol  = col p `mod` modCol
+      ixRow  = row p `mod` modRow
   in (ixRow, ixCol)
 
 row :: Point -> Row
@@ -134,8 +134,8 @@ renderTile m
   where 
     visibleUpper :: MetaTile -> Char -> String
     visibleUpper mt c
-      | visible mt == True = [toUpper c]
-      | otherwise = [c]
+      | visible mt = [toUpper c]
+      | otherwise  = [c]
       
 renderWorld :: World -> String
 renderWorld w = concatMap renderAssoc (assocs w)
@@ -224,8 +224,8 @@ toOwner _ = Enemy3
 
 addFood :: GameState -> Point -> GameState
 addFood gs loc = 
-  let newFood = loc:(food gs)
-      newWorld = (world gs) // [(loc, MetaTile {tile = FoodTile, visible = True})]
+  let newFood = loc:food gs
+      newWorld = world gs // [(loc, MetaTile {tile = FoodTile, visible = True})]
   in GameState {world = newWorld, ants = ants gs, food = newFood}
 
 sumPoint :: Point -> Point -> Point
@@ -237,13 +237,13 @@ addVisible :: World
            -> World
 addVisible w vp p = 
   let vis = map (sumPoint p) vp
-      vtuple :: (Point) -> (Point, MetaTile)
+      vtuple :: Point -> (Point, MetaTile)
       vtuple pt = (w %!% pt, visibleMetaTile $ w %! pt)
   in w // map vtuple vis
 
 addAnt :: GameParams -> GameState -> Point -> Owner -> GameState
 addAnt gp gs p own = 
-  let newAnts   = (Ant {point = p, owner = own}):(ants gs)
+  let newAnts   = Ant {point = p, owner = own}:ants gs
       newWorld' = if own == Me
                     then addVisible (world gs) (viewPoints gp) p
                     else world gs
@@ -261,7 +261,7 @@ addDead gp gs p own =
 -- if replacing a visible tile it should be kept visible
 addWorldTile :: GameState -> Tile -> Point -> GameState
 addWorldTile gs t p =
-  let newWorld = (world gs) // [(p, MetaTile {tile = t, visible = True})]
+  let newWorld = world gs // [(p, MetaTile {tile = t, visible = True})]
   in GameState {world = newWorld, ants = ants gs, food = food gs}
 
 initialGameState :: GameParams -> GameState
@@ -278,7 +278,7 @@ updateGameState gp gs s
   | otherwise = gs -- ignore line
   where
     --toPoint :: String -> Point
-    toPoint = tuplify2 . (map read) . words
+    toPoint = tuplify2 . map read . words
 
 updateGame :: GameParams -> GameState -> IO GameState
 updateGame gp gs = do
@@ -327,7 +327,7 @@ gatherParamInput = gatherInput' []
     gatherInput' :: [String] -> IO [String]
     gatherInput' xs = do
       line <- getLine
-      if ("ready" /= line)
+      if "ready" /= line
         then gatherInput' (line:xs)
         else return xs
   
@@ -360,7 +360,7 @@ endGame = do
   players <- getLine
   hPutStrLn stderr $ "Number of players: " ++ (words players !! 1)
   scores <- getLine
-  hPutStrLn stderr $ "Final scores: " ++ (unwords $ tail $ words scores)
+  hPutStrLn stderr $ "Final scores: " ++ unwords (tail $ words scores)
   -- TODO print 
 
 gameLoop :: GameParams -> GameState
