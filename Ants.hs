@@ -22,7 +22,7 @@ module Ants
   ) where
 
 import Data.Array
-import Data.List (transpose, isPrefixOf)
+import Data.List (isPrefixOf)
 import Data.Char (digitToInt, toUpper)
 import Data.Maybe (fromJust)
 import Control.Applicative
@@ -44,12 +44,12 @@ rowBound = row . snd . bounds
 
 -- Takes the modulus of the indices before accessing the array
 (%!) :: World -> Point -> MetaTile
-(%!) array p = array ! (array %!% p)
+(%!) w p = w ! (w %!% p)
 
 (%!%) :: World -> Point -> Point
-(%!%) array p = 
-  let modCol = 1 + (colBound array)
-      modRow = 1 + (rowBound array)
+(%!%) w p = 
+  let modCol = 1 + (colBound w)
+      modRow = 1 + (rowBound w)
       ixCol  = (col p) `mod` modCol
       ixRow  = (row p) `mod` modRow
   in (ixRow, ixCol)
@@ -133,8 +133,8 @@ renderTile m
   | otherwise = "*"
   where 
     visibleUpper :: MetaTile -> Char -> String
-    visibleUpper m c
-      | visible m == True = [toUpper c]
+    visibleUpper mt c
+      | visible mt == True = [toUpper c]
       | otherwise = [c]
       
 renderWorld :: World -> String
@@ -191,9 +191,9 @@ move dir p
   | otherwise    = (row p, col p + 1)
 
 passable :: World -> Order -> Bool
-passable world order =
+passable w order =
   let newPoint = move (direction order) (point $ ant order)
-  in  tile (world %! newPoint) /= Water
+  in  tile (w %! newPoint) /= Water
 
 issueOrder :: Order -> IO ()
 issueOrder order = do
@@ -235,11 +235,11 @@ addVisible :: World
            -> [Point] -- viewPoints
            -> Point -- location
            -> World
-addVisible world viewPoints p = 
-  let vis = map (sumPoint p) viewPoints
+addVisible w vp p = 
+  let vis = map (sumPoint p) vp
       vtuple :: (Point) -> (Point, MetaTile)
-      vtuple p = (world %!% p, visibleMetaTile $ world %! p)
-  in world // map vtuple vis
+      vtuple pt = (w %!% pt, visibleMetaTile $ w %! pt)
+  in w // map vtuple vis
 
 addAnt :: GameParams -> GameState -> Point -> Owner -> GameState
 addAnt gp gs p own = 
@@ -260,8 +260,8 @@ addDead gp gs p own =
 
 -- if replacing a visible tile it should be kept visible
 addWorldTile :: GameState -> Tile -> Point -> GameState
-addWorldTile gs tile p =
-  let newWorld = (world gs) // [(p, MetaTile {tile = tile, visible = True})]
+addWorldTile gs t p =
+  let newWorld = (world gs) // [(p, MetaTile {tile = t, visible = True})]
   in GameState {world = newWorld, ants = ants gs, food = food gs}
 
 initialGameState :: GameParams -> GameState
@@ -333,19 +333,29 @@ gatherParamInput = gatherInput' []
   
 createParams :: [(String, String)] -> GameParams
 createParams s =
-  let lookup' key s = read $ fromJust $ lookup key s
-      loadtime = lookup' "loadtime" s
-      turntime = lookup' "turntime" s
-      rows     = lookup' "rows" s
-      cols     = lookup' "cols" s
-      turns    = lookup' "turns" s
-      viewradius2 = lookup' "viewradius2" s
-      attackradius2 = lookup' "attackradius2" s
-      spawnradius2 = lookup' "spawnradius2" s
-      mx = truncate $ sqrt $ fromIntegral viewradius2
-      viewPoints = (,) <$> [-mx..mx] <*> [-mx..mx]
-  in GameParams loadtime turntime rows cols turns viewradius2 attackradius2 spawnradius2 viewPoints
+  let lookup' key = read $ fromJust $ lookup key s
+      lt = lookup' "loadtime"
+      tt = lookup' "turntime" 
+      rs     = lookup' "rows" 
+      cs     = lookup' "cols" 
+      ts    = lookup' "turns" 
+      vr2 = lookup' "viewradius2"
+      ar2 = lookup' "attackradius2"
+      sr2 = lookup' "spawnradius2"
+      mx = truncate $ sqrt $ fromIntegral vr2
+      vp = (,) <$> [-mx..mx] <*> [-mx..mx]
+  in GameParams { loadtime = lt
+                , turntime = tt
+                , rows = rs
+                , cols = cs
+                , turns = ts
+                , viewradius2 = vr2
+                , attackradius2 = ar2
+                , spawnradius2 = sr2
+                , viewPoints = vp
+                }
 
+endGame :: IO ()
 endGame = do
   players <- getLine
   hPutStrLn stderr $ "Number of players: " ++ (words players !! 1)
@@ -358,18 +368,18 @@ gameLoop :: GameParams -> GameState
          -> IO ()
 gameLoop gp gs doTurn = do
   line <- getLine
-  gameLoop' gp gs doTurn line
+  gameLoop' line
   where
-    gameLoop' gp gs doTurn line
+    gameLoop' line
       | "turn" `isPrefixOf` line = do 
           hPutStrLn stderr line
-          let gs' = cleanState gs
-          gs <- updateGame gp gs'
-          let orders = doTurn gp gs
+          let gsc = cleanState gs
+          gsu <- updateGame gp gsc
+          let orders = doTurn gp gsu
           hPutStrLn stderr $ show orders
           mapM_ issueOrder orders
           finishTurn
-          gameLoop gp gs doTurn
+          gameLoop gp gsu doTurn
       | "end" `isPrefixOf` line = endGame
       | otherwise = gameLoop gp gs doTurn -- ignore line
 
