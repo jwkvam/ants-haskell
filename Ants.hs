@@ -178,7 +178,7 @@ myAnts :: [Ant] -> [Ant]
 myAnts = filter isMe
 
 isEnemy :: Ant -> Bool
-isEnemy a = owner a `elem` [Enemy1 .. Enemy3]
+isEnemy = not . isMe
 
 enemyAnts :: [Ant] -> [Ant]
 enemyAnts = filter isEnemy
