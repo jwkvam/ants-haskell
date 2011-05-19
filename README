@@ -1,0 +1,3 @@
+Haskell starter bot for the 2011 Google AI Challenge - Ants
+
+Reimplement the doTurn function in MyBot.hs, just don't change its signature.
