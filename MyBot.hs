@@ -5,8 +5,8 @@ import Data.Maybe (catMaybes)
 
 import Ants
 
-tryOrder :: GameState -> [Order] -> Maybe Order
-tryOrder gs = find (passable $ world gs)
+tryOrder :: World -> [Order] -> Maybe Order
+tryOrder w = find (passable w)
 
 enumOrders :: Ant -> [Order]
 enumOrders a = map (Order a) [North .. West]
@@ -14,6 +14,6 @@ enumOrders a = map (Order a) [North .. West]
 doTurn :: GameParams -> GameState -> [Order]
 doTurn gp gs = 
   let generatedOrders = map enumOrders $ myAnts $ ants gs
-  in catMaybes $ map (tryOrder gs) generatedOrders
+  in catMaybes $ map (tryOrder (world gs)) generatedOrders
 
 main = game doTurn

@@ -1,6 +1,3 @@
--- TODO refactor add visible to restrict it to filter a sub array
-
-{-# LANGUAGE FlexibleInstances #-}
 module Ants
   (
     -- Data structures
@@ -10,6 +7,7 @@ module Ants
   , GameParams (..)
   , GameState (..)
   , Order (..)
+  , World
 
     -- Utility functions
   , myAnts -- return list of my Ants
@@ -20,15 +18,13 @@ module Ants
 
   -- TODO implement the following functions according to the starter pack guide
   --, direction
-  --, visible
   --, timeRemaining
   ) where
 
 import Data.Array
-import Data.List (findIndex, transpose, isPrefixOf)
+import Data.List (transpose, isPrefixOf)
 import Data.Char (digitToInt, toUpper)
 import Data.Maybe (fromJust)
-import Control.Monad --(when, guard)
 import Control.Applicative
 import System.IO
 
@@ -232,18 +228,6 @@ addFood gs loc =
       newWorld = (world gs) // [(loc, MetaTile {tile = FoodTile, visible = True})]
   in GameState {world = newWorld, ants = ants gs, food = newFood}
 
-{-
-addVisible :: World 
-           -> Int   -- Radius
-           -> Point
-           -> World
-addVisible world radius loc = 
-  let vis = filter (\x -> (euclidSquare (snd $ bounds world) (fst x) loc) <= radius) $ assocs world
-      vtuple :: (Point, MetaTile) -> (Point, MetaTile)
-      vtuple x = (fst x, visibleMetaTile $ snd x)
-  in world // map vtuple vis
-  -}
-
 sumPoint :: Point -> Point -> Point
 sumPoint x y = (row x + row y, col x + col y)
 
@@ -337,17 +321,6 @@ cleanState gs =
     invisibles = map clearMetaTile $ elems w
     nw = listArray (bounds w) invisibles
 
---    maxRow = row $ snd $ bounds w
---    maxCol = col $ snd $ bounds w
---    nw' = do
---      r <- [0..maxRow]
---      c <- [0..maxCol]
---      guard (w ! (r,c) /= Water)
---      guard (w ! (r,c) /= Unknown)
---      guard (w ! (r,c) /= Land)
---      return ((r,c), Land)
---    nw = w // nw'
-
 gatherParamInput :: IO [String]
 gatherParamInput = gatherInput' []
   where
@@ -390,14 +363,8 @@ gameLoop gp gs doTurn = do
     gameLoop' gp gs doTurn line
       | "turn" `isPrefixOf` line = do 
           hPutStrLn stderr line
-          --gameLoop gp gs doTurn
           let gs' = cleanState gs
-          --putStrLn "clean"
-          --putStrLn $ renderWorld (world gs')
           gs <- updateGame gp gs'
-          --putStrLn "updated"
-          --putStrLn $ renderWorld (world gs)
-          --print $ food gs
           let orders = doTurn gp gs
           hPutStrLn stderr $ show orders
           mapM_ issueOrder orders
