@@ -14,11 +14,13 @@ module Ants
   , enemyAnts -- return list of visible enemy Ants
   , passable
   , distance
+  , timeRemaining
+
+    -- main function
   , game
 
   -- TODO implement the following functions according to the starter pack guide
   --, direction
-  --, timeRemaining
   ) where
 
 import Data.Array
@@ -26,6 +28,7 @@ import Data.List (isPrefixOf)
 import Data.Char (digitToInt, toUpper)
 import Data.Maybe (fromJust)
 import Control.Applicative
+import Data.Time.Clock
 import System.IO
 
 -- type synonyms
@@ -102,7 +105,8 @@ data GameState = GameState
   { world :: World
   , ants :: [Ant]
   , food :: [Food] -- call "food GameState" to return food list
-  } deriving (Show)
+  , startTime :: UTCTime
+  }
 
 data GameParams = GameParams
   { loadtime :: Int
@@ -160,7 +164,7 @@ oneNorm :: Point -> Int
 oneNorm p = row p + col p
 
 twoNormSquared :: Point -> Int
-twoNormSquared p = (row p) ^ 2 + (col p) ^ 2
+twoNormSquared p = row p ^ 2 + col p ^ 2
 
 euclidSquare :: Point  -- bound
              -> Point -> Point -> Int
@@ -232,7 +236,7 @@ addFood :: GameState -> Point -> GameState
 addFood gs loc = 
   let newFood = loc:food gs
       newWorld = world gs // [(loc, MetaTile {tile = FoodTile, visible = True})]
-  in GameState {world = newWorld, ants = ants gs, food = newFood}
+  in GameState {world = newWorld, ants = ants gs, food = newFood, startTime = startTime gs}
 
 sumPoint :: Point -> Point -> Point
 sumPoint x y = (row x + row y, col x + col y)
@@ -254,7 +258,7 @@ addAnt gp gs p own =
                     then addVisible (world gs) (viewPoints gp) p
                     else world gs
       newWorld  = newWorld' // [(p, MetaTile {tile = ownerToTile own, visible = True})]
-  in GameState {world = newWorld, ants = newAnts, food = food gs}
+  in GameState {world = newWorld, ants = newAnts, food = food gs, startTime = startTime gs}
 
 addDead :: GameParams -> GameState -> Point -> Owner -> GameState
 addDead gp gs p own =
@@ -262,18 +266,18 @@ addDead gp gs p own =
                     then addVisible (world gs) (viewPoints gp) p
                     else world gs
       newWorld = newWorld' // [(p, MetaTile {tile = Dead, visible = True})]
-  in GameState {world = newWorld, ants = ants gs, food = food gs}
+  in GameState {world = newWorld, ants = ants gs, food = food gs, startTime = startTime gs}
 
 -- if replacing a visible tile it should be kept visible
 addWorldTile :: GameState -> Tile -> Point -> GameState
 addWorldTile gs t p =
   let newWorld = world gs // [(p, MetaTile {tile = t, visible = True})]
-  in GameState {world = newWorld, ants = ants gs, food = food gs}
+  in GameState {world = newWorld, ants = ants gs, food = food gs, startTime = startTime gs}
 
-initialGameState :: GameParams -> GameState
-initialGameState gp =
+initialGameState :: GameParams -> UTCTime -> GameState
+initialGameState gp time =
   let w = listArray ((0,0), (rows gp - 1, cols gp - 1)) (repeat MetaTile {tile = Unknown, visible = False})
-  in GameState {world = w, ants = [], food = []}
+  in GameState {world = w, ants = [], food = [], startTime = time}
 
 updateGameState :: GameParams -> GameState -> String -> GameState
 updateGameState gp gs s
@@ -283,7 +287,7 @@ updateGameState gp gs s
   | "d" `isPrefixOf` s = addDead gp gs (toPoint . init . tail $ s) (toOwner . digitToInt . last $ s)
   | otherwise = gs -- ignore line
   where
-    --toPoint :: String -> Point
+    toPoint :: String -> Point
     toPoint = tuplify2 . map read . words
 
 updateGame :: GameParams -> GameState -> IO GameState
@@ -295,7 +299,13 @@ updateGame gp gs = do
       | "turn" `isPrefixOf` line = do
           hPutStrLn stderr line
           updateGame gp gs 
-      | "go" `isPrefixOf` line   = return gs
+      | "go" `isPrefixOf` line   = do
+          currentTime <- getCurrentTime
+          return GameState {world = world gs
+                           , ants = ants gs
+                           , food = food gs
+                           , startTime = currentTime
+                           }
       | otherwise = updateGame gp $ updateGameState gp gs line
 
 -- Sets the tile to visible
@@ -321,11 +331,16 @@ clearMetaTile m
 -- Clears ants and food and sets tiles to invisible
 cleanState :: GameState -> GameState
 cleanState gs = 
-  GameState {world = nw, ants = [], food = []}
+  GameState {world = nw, ants = [], food = [], startTime = startTime gs}
   where 
     w = world gs
     invisibles = map clearMetaTile $ elems w
     nw = listArray (bounds w) invisibles
+
+timeRemaining :: GameState -> IO NominalDiffTime
+timeRemaining gs = do
+  timeNow <- getCurrentTime
+  return $ timeNow `diffUTCTime` startTime gs
 
 gatherParamInput :: IO [String]
 gatherParamInput = gatherInput' []
@@ -340,26 +355,26 @@ gatherParamInput = gatherInput' []
 createParams :: [(String, String)] -> GameParams
 createParams s =
   let lookup' key = read $ fromJust $ lookup key s
-      lt = lookup' "loadtime"
-      tt = lookup' "turntime" 
-      rs     = lookup' "rows" 
-      cs     = lookup' "cols" 
-      ts    = lookup' "turns" 
+      lt  = lookup' "loadtime"
+      tt  = lookup' "turntime"
+      rs  = lookup' "rows"
+      cs  = lookup' "cols"
+      ts  = lookup' "turns"
       vr2 = lookup' "viewradius2"
       ar2 = lookup' "attackradius2"
       sr2 = lookup' "spawnradius2"
-      mx = truncate $ sqrt $ fromIntegral vr2
+      mx  = truncate $ sqrt $ fromIntegral vr2
       vp' = (,) <$> [-mx..mx] <*> [-mx..mx]
-      vp = filter (\p -> twoNormSquared p <= vr2) vp'
-  in GameParams { loadtime = lt
-                , turntime = tt
-                , rows = rs
-                , cols = cs
-                , turns = ts
-                , viewradius2 = vr2
+      vp  = filter (\p -> twoNormSquared p <= vr2) vp'
+  in GameParams { loadtime      = lt
+                , turntime      = tt
+                , rows          = rs
+                , cols          = cs
+                , turns         = ts
+                , viewradius2   = vr2
                 , attackradius2 = ar2
-                , spawnradius2 = sr2
-                , viewPoints = vp
+                , spawnradius2  = sr2
+                , viewPoints    = vp
                 }
 
 endGame :: IO ()
@@ -371,7 +386,7 @@ endGame = do
   -- TODO print 
 
 gameLoop :: GameParams -> GameState
-         -> (GameParams -> GameState -> [Order])
+         -> (GameParams -> GameState -> IO [Order])
          -> IO ()
 gameLoop gp gs doTurn = do
   line <- getLine
@@ -382,7 +397,7 @@ gameLoop gp gs doTurn = do
           hPutStrLn stderr line
           let gsc = cleanState gs
           gsu <- updateGame gp gsc
-          let orders = doTurn gp gsu
+          orders <- doTurn gp gsu
           hPutStrLn stderr $ show orders
           mapM_ issueOrder orders
           finishTurn
@@ -390,11 +405,12 @@ gameLoop gp gs doTurn = do
       | "end" `isPrefixOf` line = endGame
       | otherwise = gameLoop gp gs doTurn -- ignore line
 
-game :: (GameParams -> GameState -> [Order]) -> IO ()
+game :: (GameParams -> GameState -> IO [Order]) -> IO ()
 game doTurn = do
   paramInput <- gatherParamInput
   let gp = createParams $ map (tuplify2 . words) paramInput
-  let gs = initialGameState gp
+  currentTime <- getCurrentTime
+  let gs = initialGameState gp currentTime
   finishTurn -- signal done with setup
   gameLoop gp gs doTurn
 
