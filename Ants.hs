@@ -156,6 +156,12 @@ manhattan bound p1 p2 =
       cold = modDistance (col bound + 1) (col p1) (col p2)
   in rowd + cold
 
+oneNorm :: Point -> Int
+oneNorm p = row p + col p
+
+twoNormSquared :: Point -> Int
+twoNormSquared p = (row p) ^ 2 + (col p) ^ 2
+
 euclidSquare :: Point  -- bound
              -> Point -> Point -> Int
 euclidSquare bound p1 p2 = 
@@ -343,7 +349,8 @@ createParams s =
       ar2 = lookup' "attackradius2"
       sr2 = lookup' "spawnradius2"
       mx = truncate $ sqrt $ fromIntegral vr2
-      vp = (,) <$> [-mx..mx] <*> [-mx..mx]
+      vp' = (,) <$> [-mx..mx] <*> [-mx..mx]
+      vp = filter (\p -> twoNormSquared p <= vr2) vp'
   in GameParams { loadtime = lt
                 , turntime = tt
                 , rows = rs
