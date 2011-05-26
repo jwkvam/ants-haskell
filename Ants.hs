@@ -24,10 +24,10 @@ module Ants
   ) where
 
 import Control.Applicative
+import Control.Monad (when)
 
 import Data.Array
 import Data.Array.IO
-import Data.Array.MArray (MArray, getBounds, newArray, readArray, writeArray)
 import Data.List (isPrefixOf)
 import Data.Char (digitToInt, toUpper)
 import Data.Maybe (fromJust)
@@ -269,24 +269,21 @@ clearMetaTile m
   | fOr (tile m) [isAnt, (==FoodTile), (==Dead)] = MetaTile {tile = Land, visible = False}
   | otherwise = MetaTile {tile = tile m, visible = False}
 
+modPoint :: Point -- max bound
+         -> Point -> Point
+modPoint b p = (row p `mod` (1 + row b), col p `mod` (1 + col b))
+
 writeArrayMod :: MWorld -> Point -> MetaTile -> IO ()
 writeArrayMod mw p mt = do
   bnds <- getBounds mw
-  let modCol = 1 + (col $ snd bnds)
-      modRow = 1 + (row $ snd bnds)
-      ixCol  = col p `mod` modCol
-      ixRow  = row p `mod` modRow
-      np     = (ixRow, ixCol)
+  let np = modPoint (snd bnds) p
   writeArray mw np mt
+
 
 readArrayMod :: MWorld -> Point -> IO MetaTile
 readArrayMod mw p = do
   bnds <- getBounds mw
-  let modCol = 1 + (col $ snd bnds)
-      modRow = 1 + (row $ snd bnds)
-      ixCol  = col p `mod` modCol
-      ixRow  = row p `mod` modRow
-      np     = (ixRow, ixCol)
+  let np = modPoint (snd bnds) p
   readArray mw np
 
 setVisible :: MWorld -> Point -> IO ()
@@ -306,11 +303,8 @@ addAnt :: GameParams -> MWorld -> [Ant] -> Point -> Owner -> IO [Ant]
 addAnt gp mw as p own = do
   writeArray mw p MetaTile {tile = ownerToTile own, visible = True}
   let as' = Ant {point = p, owner = own}:as
-  if own == Me
-    then do 
-      addVisible mw (viewPoints gp) p
-      return as'
-    else return as'
+  when (own == Me) $ addVisible mw (viewPoints gp) p
+  return as'
 
 addFood :: MWorld -> [Food] -> Point -> IO [Food]
 addFood mw fs p = do
@@ -320,13 +314,10 @@ addFood mw fs p = do
 addDead :: GameParams -> MWorld -> Point -> Owner -> IO ()
 addDead gp mw p own = do
   writeArray mw p MetaTile {tile = Dead, visible = True}
-  if own == Me
-    then addVisible mw (viewPoints gp) p
-    else return ()
+  when (own == Me) $ addVisible mw (viewPoints gp) p
 
 addWaterTile :: MWorld -> Point -> IO ()
-addWaterTile mw p = do
-  writeArray mw p MetaTile {tile = Water, visible = True}
+addWaterTile mw p = writeArray mw p MetaTile {tile = Water, visible = True}
 
 updateGameState :: GameParams -> MWorld -> MGameState -> String -> IO MGameState
 updateGameState gp mw mgs s
@@ -370,15 +361,6 @@ updateGame gp mw mgs = do
       | otherwise = do
           mgs' <- updateGameState gp mw mgs line
           updateGame gp mw mgs'
-
--- Clears ants and food and sets tiles to invisible
-{-cleanState :: GameState -> MWorld-}
-{-cleanState gs = unsafeThaw $ world gs-}
-  {-GameState {world = nw, ants = [], food = [], startTime = startTime gs}-}
-  {-where -}
-    {-w = world gs-}
-    {-invisibles = map clearMetaTile $ elems w-}
-    {-nw = listArray (bounds w) invisibles-}
 
 timeRemaining :: GameState -> IO NominalDiffTime
 timeRemaining gs = do
