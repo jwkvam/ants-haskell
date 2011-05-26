@@ -279,7 +279,6 @@ writeArrayMod mw p mt = do
   let np = modPoint (snd bnds) p
   writeArray mw np mt
 
-
 readArrayMod :: MWorld -> Point -> IO MetaTile
 readArrayMod mw p = do
   bnds <- getBounds mw
@@ -395,7 +394,7 @@ createParams s =
       sr2 = lookup' "spawnradius2"
       mx  = truncate $ sqrt $ fromIntegral vr2
       vp' = (,) <$> [-mx..mx] <*> [-mx..mx]
-      vp  = filter (\p -> twoNormSquared p <= vr2) vp'
+      vp  = filter ((<=vr2).twoNormSquared) vp'
   in GameParams { loadtime      = lt
                 , turntime      = tt
                 , rows          = rs
