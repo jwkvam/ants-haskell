@@ -138,6 +138,8 @@ data GameParams = GameParams
   , attackradius2 :: Int
   , spawnradius2 :: Int
   , viewPoints :: [Point]
+  , attackPoints :: [Point]
+  , spawnPoints :: [Point]
   } deriving (Show)
 
 --------------- Tile functions -------------------
@@ -195,10 +197,10 @@ euclidSquare bound p1 p2 =
 
 distance :: GameParams -> Point -> Point -> Int
 distance gp l1 l2 =
-  let maxRow = rows gp - 1
-      maxCol = cols gp - 1
-      rowDist = modDistance maxRow (row l1) (row l2)
-      colDist = modDistance maxCol (col l1) (col l2)
+  let modRow = rows gp
+      modCol = cols gp
+      rowDist = modDistance modRow (row l1) (row l2)
+      colDist = modDistance modCol (col l1) (col l2)
   in rowDist + colDist
 
 isMe :: Ant -> Bool
@@ -377,6 +379,14 @@ gatherParamInput = gatherInput' []
       if "ready" /= line
         then gatherInput' (line:xs)
         else return xs
+
+getPointCircle :: Int -- radius squared
+               -> [Point]
+getPointCircle r2 = 
+  let sqrt' :: Int -> Int
+      sqrt' = truncate.sqrt.fromIntegral
+      rx    = sqrt' r2
+  in filter ((<=r2).twoNormSquared) $ (,) <$> [-rx..rx] <*> [-rx..rx]
   
 createParams :: [(String, String)] -> GameParams
 createParams s =
@@ -386,12 +396,16 @@ createParams s =
       rs  = lookup' "rows"
       cs  = lookup' "cols"
       ts  = lookup' "turns"
+
       vr2 = lookup' "viewradius2"
+      vp = getPointCircle vr2
+
       ar2 = lookup' "attackradius2"
+      ap = getPointCircle ar2
+
       sr2 = lookup' "spawnradius2"
-      mx  = truncate $ sqrt $ fromIntegral vr2
-      vp' = (,) <$> [-mx..mx] <*> [-mx..mx]
-      vp  = filter ((<=vr2).twoNormSquared) vp'
+      sp = getPointCircle sr2
+
   in GameParams { loadtime      = lt
                 , turntime      = tt
                 , rows          = rs
@@ -401,6 +415,8 @@ createParams s =
                 , attackradius2 = ar2
                 , spawnradius2  = sr2
                 , viewPoints    = vp
+                , attackPoints  = ap
+                , spawnPoints   = sp
                 }
 
 -- TODO this could be better
