@@ -346,9 +346,6 @@ updateGame gp mw mgs = do
   process line
   where 
     process line
-      | "turn" `isPrefixOf` line = do
-          hPutStrLn stderr line
-          updateGame gp mw mgs
       | "go" `isPrefixOf` line   = do
           time <- getCurrentTime
           w <- unsafeFreeze mw
@@ -429,8 +426,6 @@ gameLoop gp gs doTurn = do
           mw <- mapArray clearMetaTile w
           gsu <- updateGame gp mw MGameState { mfood = [], mants = [] }
           orders <- doTurn gp gsu
-          {-putStrLn $ renderWorld $ world gsu-}
-          hPutStrLn stderr $ show orders
           mapM_ issueOrder orders
           finishTurn
           gameLoop gp gsu doTurn
