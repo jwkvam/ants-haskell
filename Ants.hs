@@ -58,7 +58,7 @@ colBound = col . snd . bounds
 rowBound :: World -> Row
 rowBound = row . snd . bounds
 
--- Takes the modulus of the indices before accessing the array
+-- | Takes the modulus of the indices before accessing the array
 (%!) :: World -> Point -> MetaTile
 (%!) w p = w ! (w %!% p)
 
@@ -203,16 +203,12 @@ distance gp l1 l2 =
       colDist = modDistance modCol (col l1) (col l2)
   in rowDist + colDist
 
-isMe :: Ant -> Bool
-isMe a = owner a == Me
+isMe, isEnemy :: Ant -> Bool
+isMe = (==Me).owner
+isEnemy = not.isMe
 
-myAnts :: [Ant] -> [Ant]
+myAnts, enemyAnts :: [Ant] -> [Ant]
 myAnts = filter isMe
-
-isEnemy :: Ant -> Bool
-isEnemy = not . isMe
-
-enemyAnts :: [Ant] -> [Ant]
 enemyAnts = filter isEnemy
 
 move :: Direction -> Point -> Point
@@ -341,7 +337,6 @@ updateGameState gp mw mgs s
     as = mants mgs
     fs = mfood mgs
     
-
 updateGame :: GameParams -> MWorld -> MGameState -> IO GameState
 updateGame gp mw mgs = do
   line <- getLine
