@@ -63,7 +63,7 @@ rowBound = row . snd . bounds
 (%!) w p = w ! (w %!% p)
 
 (%!%) :: World -> Point -> Point
-(%!%) w p = 
+(%!%) w p =
   let modCol = 1 + colBound w
       modRow = 1 + rowBound w
       ixCol  = col p `mod` modCol
@@ -79,15 +79,15 @@ col = snd
 -- Data objects
 
 -- Objects appearing on the map
-data Tile = MyTile 
-          | Enemy1Tile 
-          | Enemy2Tile 
-          | Enemy3Tile 
-          | Dead 
-          | Land 
-          | FoodTile 
-          | Water 
-          | Unknown 
+data Tile = MyTile
+          | Enemy1Tile
+          | Enemy2Tile
+          | Enemy3Tile
+          | Dead
+          | Land
+          | FoodTile
+          | Water
+          | Unknown
           deriving (Show,Eq,Enum,Bounded)
 
 data MetaTile = MetaTile
@@ -147,7 +147,7 @@ isAnt :: Tile -> Bool
 isAnt t = any (==t) [MyTile .. Enemy3Tile]
 
 renderTile :: MetaTile -> String
-renderTile m 
+renderTile m
   | tile m == MyTile = visibleUpper m 'm'
   | tile m == Enemy1Tile = visibleUpper m 'a'
   | tile m == Enemy2Tile = visibleUpper m 'b'
@@ -157,18 +157,18 @@ renderTile m
   | tile m == FoodTile = visibleUpper m 'f'
   | tile m == Water = visibleUpper m 'w'
   | otherwise = "*"
-  where 
+  where
     visibleUpper :: MetaTile -> Char -> String
     visibleUpper mt c
       | visible mt = [toUpper c]
       | otherwise  = [c]
-      
+
 renderWorld :: World -> String
 renderWorld w = concatMap renderAssoc (assocs w)
   where
     maxCol = colBound w
     renderAssoc :: (Point, MetaTile) -> String
-    renderAssoc a 
+    renderAssoc a
       | col (fst a) == maxCol = renderTile (snd a) ++ "\n"
       | otherwise = renderTile (snd a)
 
@@ -177,7 +177,7 @@ modDistance n x y = min ((x - y) `mod` n) ((y - x) `mod` n)
 
 manhattan :: Point -- bound
           -> Point -> Point -> Int
-manhattan bound p1 p2 = 
+manhattan bound p1 p2 =
   let rowd = modDistance (row bound + 1) (row p1) (row p2)
       cold = modDistance (col bound + 1) (col p1) (col p2)
   in rowd + cold
@@ -190,7 +190,7 @@ twoNormSquared p = row p ^ 2 + col p ^ 2
 
 euclidSquare :: Point  -- bound
              -> Point -> Point -> Int
-euclidSquare bound p1 p2 = 
+euclidSquare bound p1 p2 =
   let rowd = modDistance (row bound + 1) (row p1) (row p2)
       cold = modDistance (col bound + 1) (col p1) (col p2)
   in (rowd ^ 2) + (cold ^ 2)
@@ -256,14 +256,14 @@ sumPoint x y = (row x + row y, col x + col y)
 -- Sets the tile to visible
 -- If the tile is still Unknown then it is land
 visibleMetaTile :: MetaTile -> MetaTile
-visibleMetaTile m 
+visibleMetaTile m
   | tile m == Unknown = MetaTile {tile = Land, visible = True}
   | otherwise         = MetaTile {tile = tile m, visible = True}
 
 -- Resets Tile to Land if it is currently occupied by food or ant
 -- and makes the tile invisible
 clearMetaTile :: MetaTile -> MetaTile
-clearMetaTile m 
+clearMetaTile m
   | fOr (tile m) [isAnt, (==FoodTile), (==Dead)] = MetaTile {tile = Land, visible = False}
   | otherwise = MetaTile {tile = tile m, visible = False}
 
@@ -288,7 +288,7 @@ setVisible mw p = do
   mt <- readArrayMod mw p
   writeArrayMod mw p $ visibleMetaTile mt
 
-addVisible :: MWorld 
+addVisible :: MWorld
            -> [Point] -- viewPoints
            -> Point -- center point
            -> IO ()
@@ -336,12 +336,12 @@ updateGameState gp mw mgs s
     toPoint = tuplify2 . map read . words
     as = mants mgs
     fs = mfood mgs
-    
+
 updateGame :: GameParams -> MWorld -> MGameState -> IO GameState
 updateGame gp mw mgs = do
   line <- getLine
   process line
-  where 
+  where
     process line
       | "go" `isPrefixOf` line   = do
           time <- getCurrentTime
@@ -377,12 +377,12 @@ gatherParamInput = gatherInput' []
 
 getPointCircle :: Int -- radius squared
                -> [Point]
-getPointCircle r2 = 
+getPointCircle r2 =
   let sqrt' :: Int -> Int
       sqrt' = truncate.sqrt.fromIntegral
       rx    = sqrt' r2
   in filter ((<=r2).twoNormSquared) $ (,) <$> [-rx..rx] <*> [-rx..rx]
-  
+
 createParams :: [(String, String)] -> GameParams
 createParams s =
   let lookup' key = read $ fromJust $ lookup key s
@@ -430,7 +430,7 @@ gameLoop gp gs doTurn = do
   gameLoop' line
   where
     gameLoop' line
-      | "turn" `isPrefixOf` line = do 
+      | "turn" `isPrefixOf` line = do
           hPutStrLn stderr line
           --let nw = cleanState gs
           w <- unsafeThaw $ world gs
