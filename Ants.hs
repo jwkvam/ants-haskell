@@ -10,8 +10,6 @@ module Ants
   , World
 
     -- Utility functions
-  , myAnts -- return list of my Ants
-  , enemyAnts -- return list of visible enemy Ants
   , passable
   , distance
   , timeRemaining
@@ -71,24 +69,26 @@ data MetaTile = MetaTile
   , visible :: Visible
   } deriving (Show)
 
-isAnt, isDead :: Tile -> Bool
+isAnt, isDead, isAntEnemy, isDeadEnemy :: Tile -> Bool
 isAnt (AntTile _) = True
 isAnt _ = False
 
 isDead (Dead _) = True
 isDead _ = False
 
+isAntEnemy (AntTile (Enemy _)) = True
+isAntEnemy _ = False
+
+isDeadEnemy (Dead (Enemy _)) = True
+isDeadEnemy _ = False
+
 -- | For debugging
 renderTile :: MetaTile -> String
 renderTile m
   | tile m == AntTile Me = visibleUpper m 'm'
-  | tile m == AntTile Enemy1 = visibleUpper m 'a'
-  | tile m == AntTile Enemy2 = visibleUpper m 'b'
-  | tile m == AntTile Enemy3 = visibleUpper m 'c'
+  | isAntEnemy $ tile m = visibleUpper m 'e'
   | tile m == Dead Me = visibleUpper m 'd'
-  | tile m == Dead Enemy1 = visibleUpper m 'd'
-  | tile m == Dead Enemy2 = visibleUpper m 'd'
-  | tile m == Dead Enemy3 = visibleUpper m 'd'
+  | isDeadEnemy $ tile m = visibleUpper m 'd'
   | tile m == Land = visibleUpper m 'l'
   | tile m == FoodTile = visibleUpper m 'f'
   | tile m == Water = visibleUpper m 'w'
@@ -152,7 +152,9 @@ renderWorld w = concatMap renderAssoc (assocs w)
 --------------------------------------------------------------------------------
 modDistance :: Int -- modulus
             -> Int -> Int -> Int
-modDistance m x y = min ((x - y) `mod` m) ((y - x) `mod` m)
+modDistance m x y = 
+  let a = abs $ x - y
+  in min a (m - a)
 
 -- | Computes manhattan distance.
 manhattan :: Point -- modulus point
@@ -190,7 +192,7 @@ getPointCircle r2 =
 --------------------------------------------------------------------------------
 -- Ants ------------------------------------------------------------------------
 --------------------------------------------------------------------------------
-data Owner = Me | Enemy1 | Enemy2 | Enemy3 deriving (Show,Eq,Bounded,Enum)
+data Owner = Me | Enemy Int deriving (Show,Eq)
 
 data Ant = Ant
   { point :: Point
@@ -201,9 +203,9 @@ isMe, isEnemy :: Ant -> Bool
 isMe = (==Me).owner
 isEnemy = not.isMe
 
-myAnts, enemyAnts :: [Ant] -> [Ant]
-myAnts = filter isMe
-enemyAnts = filter isEnemy
+{-myAnts, enemyAnts :: [Ant] -> [Ant]-}
+{-myAnts = filter isMe-}
+{-enemyAnts = filter isEnemy-}
 
 --------------------------------------------------------------------------------
 -- Orders ----------------------------------------------------------------------
@@ -242,9 +244,7 @@ issueOrder order = do
 
 toOwner :: Int -> Owner
 toOwner 0 = Me
-toOwner 1 = Enemy1
-toOwner 2 = Enemy2
-toOwner _ = Enemy3
+toOwner a = Enemy a
 
 --------------------------------------------------------------------------------
 -- MWorld ----------------------------------------------------------------------
@@ -271,6 +271,8 @@ type Food = Point
 data GameState = GameState
   { world :: World
   , ants :: [Ant]
+  , myAnts :: [Ant]
+  , enemyAnts :: [Ant]
   , food :: [Food] -- call "food GameState" to return food list
   , startTime :: UTCTime
   }
@@ -292,6 +294,8 @@ data GameParams = GameParams
 -- | Used only for updating GameState
 data MGameState = MGameState
   { mants :: [Ant]
+  , mmyAnts :: [Ant]
+  , menemyAnts :: [Ant]
   , mfood :: [Food] -- call "food GameState" to return food list
   }
 
@@ -316,6 +320,15 @@ addAnt vp mw as p own = do
   when (own == Me) $ addVisible mw vp p
   return as'
 
+addMyAnt, addEnemyAnt :: [Ant] -> Point -> Owner -> [Ant]
+addMyAnt mas p own
+  | own == Me = Ant {point = p, owner = Me}:mas
+  | otherwise = mas
+
+addEnemyAnt eas p own 
+  | own == Me = eas
+  | otherwise = Ant {point = p, owner = own}:eas
+
 addFood :: MWorld -> [Food] -> Point -> IO [Food]
 addFood mw fs p = do
   writeArray mw p MetaTile {tile = FoodTile, visible = True}
@@ -334,21 +347,27 @@ updateGameState :: [Point] -> MWorld -> MGameState -> String -> IO MGameState
 updateGameState vp mw mgs s
   | "f" `isPrefixOf` s = do
       fs' <- addFood mw fs $ toPoint . tail $ s
-      return MGameState { mfood = fs', mants = as }
+      return MGameState { mfood = fs', mants = as, mmyAnts = mas, menemyAnts = eas }
   | "w" `isPrefixOf` s = do
       addWaterTile mw $ toPoint.tail $ s
       return mgs
   | "a" `isPrefixOf` s = do
-      as' <- addAnt vp mw as (toPoint.init.tail $ s) (toOwner.digitToInt.last $ s)
-      return MGameState { mants = as', mfood = fs}
+      let own = toOwner.digitToInt.last $ s
+          p = toPoint.init.tail $ s
+          mas' = addMyAnt mas p own
+          eas' = addEnemyAnt eas p own
+      as' <- addAnt vp mw as p own
+      return MGameState { mants = as', mmyAnts = mas', menemyAnts = eas', mfood = fs}
   | "d" `isPrefixOf` s = do
       addDead vp mw (toPoint.init.tail $ s) (toOwner.digitToInt.last $ s)
       return mgs
   | otherwise = return mgs -- ignore line
   where
     toPoint :: String -> Point
-    toPoint = tuplify2 . map read . words
+    toPoint = tuplify2.map read.words
     as = mants mgs
+    mas = mmyAnts mgs
+    eas = menemyAnts mgs
     fs = mfood mgs
 
 updateGame :: [Point] -> MWorld -> MGameState -> IO GameState
@@ -362,6 +381,8 @@ updateGame vp mw mgs = do
           w <- unsafeFreeze mw
           return GameState { world = w
                            , ants = mants mgs
+                           , myAnts = mmyAnts mgs
+                           , enemyAnts = menemyAnts mgs
                            , food = mfood mgs
                            , startTime = time
                            }
@@ -372,7 +393,7 @@ updateGame vp mw mgs = do
 initialGameState :: GameParams -> UTCTime -> GameState
 initialGameState gp time =
   let w = listArray ((0,0), (rows gp - 1, cols gp - 1)) (repeat MetaTile {tile = Unknown, visible = False})
-  in GameState {world = w, ants = [], food = [], startTime = time}
+  in GameState {world = w, ants = [], myAnts = [], enemyAnts = [], food = [], startTime = time}
 
 gatherParamInput :: IO [String]
 gatherParamInput = gatherInput' []
@@ -427,7 +448,7 @@ gameLoop gp gs doTurn = do
           hPutStrLn stderr line
           w <- unsafeThaw $ world gs
           mw <- mapArray clearMetaTile w
-          gsu <- updateGame (viewCircle gp) mw MGameState { mfood = [], mants = [] }
+          gsu <- updateGame (viewCircle gp) mw $ MGameState [] [] [] []
           orders <- doTurn gp gsu
           mapM_ issueOrder orders
           finishTurn
