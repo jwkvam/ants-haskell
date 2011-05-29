@@ -18,9 +18,6 @@ module Ants
 
     -- main function
   , game
-
-  -- TODO implement the following functions according to the starter pack guide
-  -- , direction
   ) where
 
 import Control.Applicative
@@ -58,16 +55,13 @@ col = snd
 --------------------------------------------------------------------------------
 -- Tiles -----------------------------------------------------------------------
 --------------------------------------------------------------------------------
-data Tile = MyTile
-          | Enemy1Tile
-          | Enemy2Tile
-          | Enemy3Tile
-          | Dead
+data Tile = AntTile Owner
+          | Dead Owner
           | Land
           | FoodTile
           | Water
           | Unknown
-          deriving (Show,Eq,Enum,Bounded)
+          deriving (Show,Eq)
 
 type Visible = Bool
 
@@ -77,17 +71,24 @@ data MetaTile = MetaTile
   , visible :: Visible
   } deriving (Show)
 
-isAnt :: Tile -> Bool
-isAnt t = any (==t) [MyTile .. Enemy3Tile]
+isAnt, isDead :: Tile -> Bool
+isAnt (AntTile _) = True
+isAnt _ = False
 
--- | Convert tile into a Char (Sometimes [Char, '\n'])
+isDead (Dead _) = True
+isDead _ = False
+
+-- | For debugging
 renderTile :: MetaTile -> String
 renderTile m
-  | tile m == MyTile = visibleUpper m 'm'
-  | tile m == Enemy1Tile = visibleUpper m 'a'
-  | tile m == Enemy2Tile = visibleUpper m 'b'
-  | tile m == Enemy3Tile = visibleUpper m 'c'
-  | tile m == Dead = visibleUpper m 'd'
+  | tile m == AntTile Me = visibleUpper m 'm'
+  | tile m == AntTile Enemy1 = visibleUpper m 'a'
+  | tile m == AntTile Enemy2 = visibleUpper m 'b'
+  | tile m == AntTile Enemy3 = visibleUpper m 'c'
+  | tile m == Dead Me = visibleUpper m 'd'
+  | tile m == Dead Enemy1 = visibleUpper m 'd'
+  | tile m == Dead Enemy2 = visibleUpper m 'd'
+  | tile m == Dead Enemy3 = visibleUpper m 'd'
   | tile m == Land = visibleUpper m 'l'
   | tile m == FoodTile = visibleUpper m 'f'
   | tile m == Water = visibleUpper m 'w'
@@ -108,11 +109,8 @@ visibleMetaTile m
 -- | and makes the tile invisible.
 clearMetaTile :: MetaTile -> MetaTile
 clearMetaTile m
-  | fOr (tile m) [isAnt, (==FoodTile), (==Dead)] = MetaTile {tile = Land, visible = False}
+  | fOr (tile m) [isAnt, (==FoodTile), isDead] = MetaTile {tile = Land, visible = False}
   | otherwise = MetaTile {tile = tile m, visible = False}
-
--- Convienient type synomyms
-type Food = Point
 
 --------------------------------------------------------------------------------
 -- Immutable World -------------------------------------------------------------
@@ -120,15 +118,16 @@ type Food = Point
 type World = Array Point MetaTile
 
 colBound :: World -> Col
-colBound = col . snd . bounds
+colBound = col.snd.bounds
 
 rowBound :: World -> Row
-rowBound = row . snd . bounds
+rowBound = row.snd.bounds
 
--- | Takes the modulus of the indices before accessing the array
+-- | Accesses World using the modulus of the point
 (%!) :: World -> Point -> MetaTile
 (%!) w p = w ! (w %!% p)
 
+-- | Takes the modulus of the point
 (%!%) :: World -> Point -> Point
 (%!%) w p =
   let modCol = 1 + colBound w
@@ -137,6 +136,7 @@ rowBound = row . snd . bounds
       ixRow  = row p `mod` modRow
   in (ixRow, ixCol)
 
+-- | For debugging
 renderWorld :: World -> String
 renderWorld w = concatMap renderAssoc (assocs w)
   where
@@ -240,12 +240,6 @@ issueOrder order = do
       sdir = (show . direction) order
   putStrLn $ "o " ++ srow ++ " " ++ scol ++ " " ++ sdir
 
-ownerToTile :: Owner -> Tile
-ownerToTile Me = MyTile
-ownerToTile Enemy1 = Enemy1Tile
-ownerToTile Enemy2 = Enemy2Tile
-ownerToTile Enemy3 = Enemy2Tile
-
 toOwner :: Int -> Owner
 toOwner 0 = Me
 toOwner 1 = Enemy1
@@ -272,6 +266,8 @@ readArrayMod mw p = do
 --------------------------------------------------------------------------------
 -- Updating Game ---------------------------------------------------------------
 --------------------------------------------------------------------------------
+type Food = Point
+
 data GameState = GameState
   { world :: World
   , ants :: [Ant]
@@ -315,7 +311,7 @@ addVisible mw vp p = do
 addAnt :: [Point] -- viewPoints
        -> MWorld -> [Ant] -> Point -> Owner -> IO [Ant]
 addAnt vp mw as p own = do
-  writeArray mw p MetaTile {tile = ownerToTile own, visible = True}
+  writeArray mw p MetaTile {tile = AntTile own, visible = True}
   let as' = Ant {point = p, owner = own}:as
   when (own == Me) $ addVisible mw vp p
   return as'
@@ -328,7 +324,7 @@ addFood mw fs p = do
 addDead :: [Point] -- viewPoints
         -> MWorld -> Point -> Owner -> IO ()
 addDead vp mw p own = do
-  writeArray mw p MetaTile {tile = Dead, visible = True}
+  writeArray mw p MetaTile {tile = Dead own, visible = True}
   when (own == Me) $ addVisible mw vp p
 
 addWaterTile :: MWorld -> Point -> IO ()
@@ -419,14 +415,6 @@ createParams s =
                 , spawnCircle   = sp
                 }
 
--- TODO this could be better
-endGame :: IO ()
-endGame = do
-  players <- getLine
-  hPutStrLn stderr $ "Number of players: " ++ (words players !! 1)
-  scores <- getLine
-  hPutStrLn stderr $ "Final scores: " ++ unwords (tail $ words scores)
-
 gameLoop :: GameParams -> GameState
          -> (GameParams -> GameState -> IO [Order])
          -> IO ()
@@ -455,6 +443,14 @@ game doTurn = do
   let gs = initialGameState gp currentTime
   finishTurn
   gameLoop gp gs doTurn
+
+-- TODO this could be better
+endGame :: IO ()
+endGame = do
+  players <- getLine
+  hPutStrLn stderr $ "Number of players: " ++ (words players !! 1)
+  scores <- getLine
+  hPutStrLn stderr $ "Final scores: " ++ unwords (tail $ words scores)
 
 -- | Tell engine that we have finished the turn or setting up.
 finishTurn :: IO ()
