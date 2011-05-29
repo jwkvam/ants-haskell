@@ -37,6 +37,11 @@ import System.IO
 
 import Util (fOr, tuplify2)
 
+timeRemaining :: GameState -> IO NominalDiffTime
+timeRemaining gs = do
+  timeNow <- getCurrentTime
+  return $ timeNow `diffUTCTime` startTime gs
+
 --------------------------------------------------------------------------------
 -- Points ----------------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -71,6 +76,9 @@ data MetaTile = MetaTile
   { tile :: Tile
   , visible :: Visible
   } deriving (Show)
+
+isAnt :: Tile -> Bool
+isAnt t = any (==t) [MyTile .. Enemy3Tile]
 
 -- | Convert tile into a Char (Sometimes [Char, '\n'])
 renderTile :: MetaTile -> String
@@ -128,11 +136,6 @@ rowBound = row . snd . bounds
       ixCol  = col p `mod` modCol
       ixRow  = row p `mod` modRow
   in (ixRow, ixCol)
-
---------------- Tile functions -------------------
-isAnt :: Tile -> Bool
-isAnt t = any (==t) [MyTile .. Enemy3Tile]
-
 
 renderWorld :: World -> String
 renderWorld w = concatMap renderAssoc (assocs w)
@@ -369,11 +372,6 @@ updateGame vp mw mgs = do
       | otherwise = do
           mgs' <- updateGameState vp mw mgs line
           updateGame vp mw mgs'
-
-timeRemaining :: GameState -> IO NominalDiffTime
-timeRemaining gs = do
-  timeNow <- getCurrentTime
-  return $ timeNow `diffUTCTime` startTime gs
 
 initialGameState :: GameParams -> UTCTime -> GameState
 initialGameState gp time =
