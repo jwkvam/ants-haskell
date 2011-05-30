@@ -292,11 +292,12 @@ data GameParams = GameParams
   , spawnCircle :: [Point]
   } deriving (Show)
 
-setVisible :: MWorld s -> Point -> ST s (MWorld s)
+setVisible :: MWorld s -> Point -> ST s ()
 setVisible mw p = do
-  mt <- readArrayMod mw p
-  writeArrayMod mw p $ visibleMetaTile mt
-  return mw
+  bnds <- getBounds mw
+  let np = modPoint (incPoint $ snd bnds) p
+  mt <- readArray mw np
+  writeArray mw np $ visibleMetaTile mt
 
 addVisible :: World
            -> [Point] -- viewPoints
@@ -393,11 +394,11 @@ gameLoop gp doTurn w (line:input)
       let clearWorld = runSTArray $ unsafeThaw w >>= mapArray clearMetaTile
       time <- getCurrentTime
       let cs = break (isPrefixOf "go") input
-          gsu = foldl' (updateGameState $ viewCircle gp) (GameState clearWorld [] [] time) (fst cs)
-      orders <- doTurn gsu
+          gs = foldl' (updateGameState $ viewCircle gp) (GameState clearWorld [] [] time) (fst cs)
+      orders <- doTurn gs
       mapM_ issueOrder orders
       finishTurn
-      gameLoop gp doTurn (world gsu) (tail $ snd cs)
+      gameLoop gp doTurn (world gs) (tail $ snd cs)
   | "end" `isPrefixOf` line = endGame input
   | otherwise = gameLoop gp doTurn w input
 
