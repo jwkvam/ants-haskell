@@ -21,7 +21,6 @@ module Ants
   ) where
 
 import Control.Applicative
-import Control.Monad (when)
 import Control.Monad.ST
 
 import Data.Array
@@ -250,25 +249,9 @@ toOwner 0 = Me
 toOwner a = Enemy a
 
 --------------------------------------------------------------------------------
--- MWorld ----------------------------------------------------------------------
---------------------------------------------------------------------------------
-type MWorld s = STArray s Point MetaTile
-
-writeArrayMod :: MWorld s -> Point -> MetaTile -> ST s ()
-writeArrayMod mw p mt = do
-  bnds <- getBounds mw
-  let np = modPoint (incPoint $ snd bnds) p
-  writeArray mw np mt
-
-readArrayMod :: MWorld s -> Point -> ST s MetaTile
-readArrayMod mw p = do
-  bnds <- getBounds mw
-  let np = modPoint (incPoint $ snd bnds) p
-  readArray mw np
-
---------------------------------------------------------------------------------
 -- Updating Game ---------------------------------------------------------------
 --------------------------------------------------------------------------------
+type MWorld s = STArray s Point MetaTile
 type Food = Point
 
 data GameState = GameState
@@ -386,13 +369,14 @@ gameLoop gp doTurn w (line:input)
       let clearWorld = runSTArray $ unsafeThaw w >>= mapArray clearMetaTile
       time <- getCurrentTime
       let cs = break (isPrefixOf "go") input
-          gs = foldl' (updateGameState $ viewCircle gp) (GameState w [] [] time) (fst cs)
+          gs = foldl' (updateGameState $ viewCircle gp) (GameState clearWorld [] [] time) (fst cs)
       orders <- doTurn gs
       mapM_ issueOrder orders
       finishTurn
       gameLoop gp doTurn (world gs) (tail $ snd cs)
   | "end" `isPrefixOf` line = endGame input
   | otherwise = gameLoop gp doTurn w input
+gameLoop _ _ _ [] = endGame []
 
 game :: (GameParams -> GameState -> IO [Order]) -> IO ()
 game doTurn = do
