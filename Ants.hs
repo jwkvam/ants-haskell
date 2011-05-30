@@ -302,61 +302,53 @@ setVisible mw p = do
 addVisible :: World
            -> [Point] -- viewPoints
            -> Point -- center point
-           -> Owner
            -> World
-addVisible w vp p own = 
-  let vis = map (sumPoint p) vp
-  in if own == Me
-       then runSTArray $ do 
-          w' <- unsafeThaw w
-          mapM_ (setVisible w') vis
-          return w'
-       else w
+addVisible w vp p = 
+  runSTArray $ do 
+    w' <- unsafeThaw w
+    mapM_ (setVisible w') $ map (sumPoint p) vp
+    return w'
 
 updateGameState :: [Point] -> GameState -> String -> GameState
 updateGameState vp gs s
   | "f" `isPrefixOf` s = -- add food
       let p = toPoint.tail $ s
-          fs' = p:fs
+          fs' = p:(food gs)
           nw = runSTArray $ do 
-            w' <- unsafeThaw w
+            w' <- unsafeThaw (world gs)
             writeArray w' p MetaTile {tile = FoodTile, visible = True}
             return w'
-      in GameState nw as fs' time
+      in GameState nw (ants gs) fs' (startTime gs)
   | "w" `isPrefixOf` s = -- add water
       let p = toPoint.tail $ s
           nw = runSTArray $ do
-            w' <- unsafeThaw w
+            w' <- unsafeThaw (world gs)
             writeArray w' p MetaTile {tile = Water, visible = True}
             return w'
-      in GameState nw as fs time
+      in GameState nw (ants gs) (food gs) (startTime gs)
   | "a" `isPrefixOf` s = -- add ant
       let own = toOwner.digitToInt.last $ s
           p = toPoint.init.tail $ s
-          as' = Ant { point = p, owner = own}:as
+          as' = Ant { point = p, owner = own}:(ants gs)
           nw = runSTArray $ do
-            w' <- unsafeThaw w
+            w' <- unsafeThaw (world gs)
             writeArray w' p MetaTile {tile = AntTile own, visible = True}
             return w'
-          nw' = addVisible nw vp p own
-      in GameState nw' as' fs time
+          nw' = if own == Me then addVisible nw vp p else nw
+      in GameState nw' as' (food gs) (startTime gs)
   | "d" `isPrefixOf` s = -- add dead ant
       let own = toOwner.digitToInt.last $ s
           p = toPoint.init.tail $ s
           nw = runSTArray $ do
-            w' <- unsafeThaw w
+            w' <- unsafeThaw (world gs)
             writeArray w' p MetaTile {tile = Dead own, visible = True}
             return w'
-          nw' = addVisible nw vp p own
-      in GameState nw' as fs time
+          nw' = if own == Me then addVisible nw vp p else nw
+      in GameState nw' (ants gs) (food gs) (startTime gs)
   | otherwise = gs -- ignore line
   where
     toPoint :: String -> Point
     toPoint = tuplify2.map read.words
-    w = world gs
-    as = ants gs
-    fs = food gs
-    time = startTime gs
 
 initialWorld :: GameParams -> World
 initialWorld gp = listArray ((0,0), (rows gp - 1, cols gp - 1)) $ repeat MetaTile {tile = Unknown, visible = False}
@@ -394,7 +386,7 @@ gameLoop gp doTurn w (line:input)
       let clearWorld = runSTArray $ unsafeThaw w >>= mapArray clearMetaTile
       time <- getCurrentTime
       let cs = break (isPrefixOf "go") input
-          gs = foldl' (updateGameState $ viewCircle gp) (GameState clearWorld [] [] time) (fst cs)
+          gs = foldl' (updateGameState $ viewCircle gp) (GameState w [] [] time) (fst cs)
       orders <- doTurn gs
       mapM_ issueOrder orders
       finishTurn
@@ -413,12 +405,8 @@ game doTurn = do
 -- TODO this could be better
 endGame :: [String] -> IO ()
 endGame input = do
-  putStrLn "end of game"
-  mapM_ putStrLn input
-  {-players <- getLine-}
-  {-hPutStrLn stderr $ "Number of players: " ++ (words players !! 1)-}
-  {-scores <- getLine-}
-  {-hPutStrLn stderr $ "Final scores: " ++ unwords (tail $ words scores)-}
+  hPutStrLn stderr "end of game"
+  mapM_ (hPutStrLn stderr) input
 
 -- | Tell engine that we have finished the turn or setting up.
 finishTurn :: IO ()
