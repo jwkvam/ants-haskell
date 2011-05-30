@@ -10,6 +10,8 @@ module Ants
   , World
 
     -- Utility functions
+  , myAnts
+  , enemyAnts
   , passable
   , distance
   , timeRemaining
@@ -20,17 +22,18 @@ module Ants
 
 import Control.Applicative
 import Control.Monad (when)
+import Control.Monad.ST
 
 import Data.Array
-import Data.Array.IO
-import Data.List (isPrefixOf)
+import Data.Array.ST
+import Data.List (isPrefixOf, foldl')
 import Data.Char (digitToInt, toUpper)
 import Data.Maybe (fromJust)
 
 import Data.Time.Clock
 import System.IO
 
-import Util (fOr, tuplify2)
+import Util
 
 timeRemaining :: GameState -> IO NominalDiffTime
 timeRemaining gs = do
@@ -203,9 +206,9 @@ isMe, isEnemy :: Ant -> Bool
 isMe = (==Me).owner
 isEnemy = not.isMe
 
-{-myAnts, enemyAnts :: [Ant] -> [Ant]-}
-{-myAnts = filter isMe-}
-{-enemyAnts = filter isEnemy-}
+myAnts, enemyAnts :: [Ant] -> [Ant]
+myAnts = filter isMe
+enemyAnts = filter isEnemy
 
 --------------------------------------------------------------------------------
 -- Orders ----------------------------------------------------------------------
@@ -249,15 +252,15 @@ toOwner a = Enemy a
 --------------------------------------------------------------------------------
 -- MWorld ----------------------------------------------------------------------
 --------------------------------------------------------------------------------
-type MWorld = IOArray Point MetaTile
+type MWorld s = STArray s Point MetaTile
 
-writeArrayMod :: MWorld -> Point -> MetaTile -> IO ()
+writeArrayMod :: MWorld s -> Point -> MetaTile -> ST s ()
 writeArrayMod mw p mt = do
   bnds <- getBounds mw
   let np = modPoint (incPoint $ snd bnds) p
   writeArray mw np mt
 
-readArrayMod :: MWorld -> Point -> IO MetaTile
+readArrayMod :: MWorld s -> Point -> ST s MetaTile
 readArrayMod mw p = do
   bnds <- getBounds mw
   let np = modPoint (incPoint $ snd bnds) p
@@ -270,10 +273,8 @@ type Food = Point
 
 data GameState = GameState
   { world :: World
-  , ants :: [Ant]
-  , myAnts :: [Ant]
-  , enemyAnts :: [Ant]
-  , food :: [Food] -- call "food GameState" to return food list
+  , ants :: [Ant] -- call "ants GameState" to all ants
+  , food :: [Food] -- call "food GameState" to all food
   , startTime :: UTCTime
   }
 
@@ -291,143 +292,88 @@ data GameParams = GameParams
   , spawnCircle :: [Point]
   } deriving (Show)
 
--- | Used only for updating GameState
-data MGameState = MGameState
-  { mants :: [Ant]
-  , mmyAnts :: [Ant]
-  , menemyAnts :: [Ant]
-  , mfood :: [Food] -- call "food GameState" to return food list
-  }
-
-setVisible :: MWorld -> Point -> IO ()
+setVisible :: MWorld s -> Point -> ST s (MWorld s)
 setVisible mw p = do
   mt <- readArrayMod mw p
   writeArrayMod mw p $ visibleMetaTile mt
+  return mw
 
-addVisible :: MWorld
+addVisible :: World
            -> [Point] -- viewPoints
            -> Point -- center point
-           -> IO ()
-addVisible mw vp p = do
+           -> Owner
+           -> World
+addVisible w vp p own = 
   let vis = map (sumPoint p) vp
-  mapM_ (setVisible mw) vis
+  in if own == Me
+       then runSTArray $ do 
+          w' <- unsafeThaw w
+          mapM_ (setVisible w') vis
+          return w'
+       else w
 
-addAnt :: [Point] -- viewPoints
-       -> MWorld -> [Ant] -> Point -> Owner -> IO [Ant]
-addAnt vp mw as p own = do
-  writeArray mw p MetaTile {tile = AntTile own, visible = True}
-  let as' = Ant {point = p, owner = own}:as
-  when (own == Me) $ addVisible mw vp p
-  return as'
-
-addMyAnt, addEnemyAnt :: [Ant] -> Point -> Owner -> [Ant]
-addMyAnt mas p own
-  | own == Me = Ant {point = p, owner = Me}:mas
-  | otherwise = mas
-
-addEnemyAnt eas p own 
-  | own == Me = eas
-  | otherwise = Ant {point = p, owner = own}:eas
-
-addFood :: MWorld -> [Food] -> Point -> IO [Food]
-addFood mw fs p = do
-  writeArray mw p MetaTile {tile = FoodTile, visible = True}
-  return $ p:fs
-
-addDead :: [Point] -- viewPoints
-        -> MWorld -> Point -> Owner -> IO ()
-addDead vp mw p own = do
-  writeArray mw p MetaTile {tile = Dead own, visible = True}
-  when (own == Me) $ addVisible mw vp p
-
-addWaterTile :: MWorld -> Point -> IO ()
-addWaterTile mw p = writeArray mw p MetaTile {tile = Water, visible = True}
-
-updateGameState :: [Point] -> MWorld -> MGameState -> String -> IO MGameState
-updateGameState vp mw mgs s
-  | "f" `isPrefixOf` s = do
-      fs' <- addFood mw fs $ toPoint . tail $ s
-      return MGameState { mfood = fs', mants = as, mmyAnts = mas, menemyAnts = eas }
-  | "w" `isPrefixOf` s = do
-      addWaterTile mw $ toPoint.tail $ s
-      return mgs
-  | "a" `isPrefixOf` s = do
+updateGameState :: [Point] -> GameState -> String -> GameState
+updateGameState vp gs s
+  | "f" `isPrefixOf` s = -- add food
+      let p = toPoint.tail $ s
+          fs' = p:fs
+          nw = runSTArray $ do 
+            w' <- unsafeThaw w
+            writeArray w' p MetaTile {tile = FoodTile, visible = True}
+            return w'
+      in GameState nw as fs' time
+  | "w" `isPrefixOf` s = -- add water
+      let p = toPoint.tail $ s
+          nw = runSTArray $ do
+            w' <- unsafeThaw w
+            writeArray w' p MetaTile {tile = Water, visible = True}
+            return w'
+      in GameState nw as fs time
+  | "a" `isPrefixOf` s = -- add ant
       let own = toOwner.digitToInt.last $ s
           p = toPoint.init.tail $ s
-          mas' = addMyAnt mas p own
-          eas' = addEnemyAnt eas p own
-      as' <- addAnt vp mw as p own
-      return MGameState { mants = as', mmyAnts = mas', menemyAnts = eas', mfood = fs}
-  | "d" `isPrefixOf` s = do
-      addDead vp mw (toPoint.init.tail $ s) (toOwner.digitToInt.last $ s)
-      return mgs
-  | otherwise = return mgs -- ignore line
+          as' = Ant { point = p, owner = own}:as
+          nw = runSTArray $ do
+            w' <- unsafeThaw w
+            writeArray w' p MetaTile {tile = AntTile own, visible = True}
+            return w'
+          nw' = addVisible nw vp p own
+      in GameState nw' as' fs time
+  | "d" `isPrefixOf` s = -- add dead ant
+      let own = toOwner.digitToInt.last $ s
+          p = toPoint.init.tail $ s
+          nw = runSTArray $ do
+            w' <- unsafeThaw w
+            writeArray w' p MetaTile {tile = Dead own, visible = True}
+            return w'
+          nw' = addVisible nw vp p own
+      in GameState nw' as fs time
+  | otherwise = gs -- ignore line
   where
     toPoint :: String -> Point
     toPoint = tuplify2.map read.words
-    as = mants mgs
-    mas = mmyAnts mgs
-    eas = menemyAnts mgs
-    fs = mfood mgs
+    w = world gs
+    as = ants gs
+    fs = food gs
+    time = startTime gs
 
-updateGame :: [Point] -> MWorld -> MGameState -> IO GameState
-updateGame vp mw mgs = do
-  line <- getLine
-  process line
-  where
-    process line
-      | "go" `isPrefixOf` line   = do
-          time <- getCurrentTime
-          w <- unsafeFreeze mw
-          return GameState { world = w
-                           , ants = mants mgs
-                           , myAnts = mmyAnts mgs
-                           , enemyAnts = menemyAnts mgs
-                           , food = mfood mgs
-                           , startTime = time
-                           }
-      | otherwise = do
-          mgs' <- updateGameState vp mw mgs line
-          updateGame vp mw mgs'
-
-initialGameState :: GameParams -> UTCTime -> GameState
-initialGameState gp time =
-  let w = listArray ((0,0), (rows gp - 1, cols gp - 1)) (repeat MetaTile {tile = Unknown, visible = False})
-  in GameState {world = w, ants = [], myAnts = [], enemyAnts = [], food = [], startTime = time}
-
-gatherParamInput :: IO [String]
-gatherParamInput = gatherInput' []
-  where
-    gatherInput' :: [String] -> IO [String]
-    gatherInput' xs = do
-      line <- getLine
-      if "ready" /= line
-        then gatherInput' (line:xs)
-        else return xs
+initialWorld :: GameParams -> World
+initialWorld gp = listArray ((0,0), (rows gp - 1, cols gp - 1)) $ repeat MetaTile {tile = Unknown, visible = False}
 
 createParams :: [(String, String)] -> GameParams
 createParams s =
   let lookup' key = read $ fromJust $ lookup key s
-      lt  = lookup' "loadtime"
-      tt  = lookup' "turntime"
-      rs  = lookup' "rows"
-      cs  = lookup' "cols"
-      ts  = lookup' "turns"
-
       vr2 = lookup' "viewradius2"
-      vp = getPointCircle vr2
-
       ar2 = lookup' "attackradius2"
-      ap = getPointCircle ar2
-
       sr2 = lookup' "spawnradius2"
+      vp = getPointCircle vr2
+      ap = getPointCircle ar2
       sp = getPointCircle sr2
-
-  in GameParams { loadtime      = lt
-                , turntime      = tt
-                , rows          = rs
-                , cols          = cs
-                , turns         = ts
+  in GameParams { loadtime      = lookup' "loadtime"
+                , turntime      = lookup' "turntime"
+                , rows          = lookup' "rows"
+                , cols          = lookup' "cols"
+                , turns         = lookup' "turns"
                 , viewradius2   = vr2
                 , attackradius2 = ar2
                 , spawnradius2  = sr2
@@ -436,45 +382,47 @@ createParams s =
                 , spawnCircle   = sp
                 }
 
-gameLoop :: GameParams -> GameState
-         -> (GameParams -> GameState -> IO [Order])
+gameLoop :: GameParams 
+         -> (GameState -> IO [Order])
+         -> World
+         -> [String] -- input
          -> IO ()
-gameLoop gp gs doTurn = do
-  line <- getLine
-  gameLoop' line
-  where
-    gameLoop' line
-      | "turn" `isPrefixOf` line = do
-          hPutStrLn stderr line
-          w <- unsafeThaw $ world gs
-          mw <- mapArray clearMetaTile w
-          gsu <- updateGame (viewCircle gp) mw $ MGameState [] [] [] []
-          orders <- doTurn gp gsu
-          mapM_ issueOrder orders
-          finishTurn
-          gameLoop gp gsu doTurn
-      | "end" `isPrefixOf` line = endGame
-      | otherwise = gameLoop gp gs doTurn -- ignore line
+gameLoop gp doTurn w (line:input)
+  | "turn" `isPrefixOf` line = do
+      hPutStrLn stderr line
+      let clearWorld = runSTArray $ unsafeThaw w >>= mapArray clearMetaTile
+      time <- getCurrentTime
+      let cs = break (isPrefixOf "go") input
+          gsu = foldl' (updateGameState $ viewCircle gp) (GameState clearWorld [] [] time) (fst cs)
+      orders <- doTurn gsu
+      mapM_ issueOrder orders
+      finishTurn
+      gameLoop gp doTurn (world gsu) (tail $ snd cs)
+  | "end" `isPrefixOf` line = endGame input
+  | otherwise = gameLoop gp doTurn w input
 
 game :: (GameParams -> GameState -> IO [Order]) -> IO ()
 game doTurn = do
-  paramInput <- gatherParamInput
-  let gp = createParams $ map (tuplify2.words) paramInput
-  currentTime <- getCurrentTime
-  let gs = initialGameState gp currentTime
+  content <- getContents
+  let cs = break (isPrefixOf "ready") $ lines content
+      gp = createParams $ map (tuplify2.words) (fst cs)
   finishTurn
-  gameLoop gp gs doTurn
+  gameLoop gp (doTurn gp) (initialWorld gp) (tail $ snd cs)
 
 -- TODO this could be better
-endGame :: IO ()
-endGame = do
-  players <- getLine
-  hPutStrLn stderr $ "Number of players: " ++ (words players !! 1)
-  scores <- getLine
-  hPutStrLn stderr $ "Final scores: " ++ unwords (tail $ words scores)
+endGame :: [String] -> IO ()
+endGame input = do
+  putStrLn "end of game"
+  mapM_ putStrLn input
+  {-players <- getLine-}
+  {-hPutStrLn stderr $ "Number of players: " ++ (words players !! 1)-}
+  {-scores <- getLine-}
+  {-hPutStrLn stderr $ "Final scores: " ++ unwords (tail $ words scores)-}
 
 -- | Tell engine that we have finished the turn or setting up.
 finishTurn :: IO ()
-finishTurn = putStrLn "go" >> hFlush stdout
+finishTurn = do
+  putStrLn "go" 
+  hFlush stdout
 
 -- vim: set expandtab:

@@ -26,7 +26,7 @@ generateOrders a = map (Order a) [North .. West]
 doTurn :: GameParams -> GameState -> IO [Order]
 doTurn gp gs = do
   -- generate orders for all ants belonging to me
-  let generatedOrders = map generateOrders $ myAnts gs
+  let generatedOrders = map generateOrders $ myAnts $ ants gs
   -- for each ant take the first "passable" order, if one exists
       orders = mapMaybe (tryOrder (world gs)) generatedOrders
   -- this shows how to check the remaining time

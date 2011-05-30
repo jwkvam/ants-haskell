@@ -4,6 +4,8 @@ module Util
   , tuplify2
   ) where
 
+import Data.Array.ST
+
 fAnd :: a -> [a -> Bool] -> Bool
 fAnd x = all ($x)
 
