@@ -22,6 +22,7 @@ module Ants
 
 import Control.Applicative
 import Control.Monad.ST
+import Control.Monad (unless)
 
 import Data.Array
 import Data.Array.ST
@@ -108,7 +109,7 @@ visibleMetaTile m
   | otherwise         = MetaTile {tile = tile m, visible = True}
 
 -- | Resets tile to land if it is currently occupied by food or ant
--- | and makes the tile invisible.
+--   and makes the tile invisible.
 clearMetaTile :: MetaTile -> MetaTile
 clearMetaTile m
   | fOr (tile m) [isAnt, (==FoodTile), isDead] = MetaTile {tile = Land, visible = False}
@@ -280,7 +281,7 @@ setVisible mw p = do
   bnds <- getBounds mw
   let np = modPoint (incPoint $ snd bnds) p
   mt <- readArray mw np
-  writeArray mw np $ visibleMetaTile `seq` mt
+  unless (visible mt) $ writeArray mw np $ visibleMetaTile `seq` mt
 
 addVisible :: World
            -> [Point] -- viewPoints
