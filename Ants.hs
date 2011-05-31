@@ -280,7 +280,7 @@ setVisible mw p = do
   bnds <- getBounds mw
   let np = modPoint (incPoint $ snd bnds) p
   mt <- readArray mw np
-  writeArray mw np $ visibleMetaTile mt
+  writeArray mw np $ visibleMetaTile `seq` mt
 
 addVisible :: World
            -> [Point] -- viewPoints
@@ -297,41 +297,33 @@ updateGameState vp gs s
   | "f" `isPrefixOf` s = -- add food
       let p = toPoint.tail $ s
           fs' = p:food gs
-          nw = runSTArray $ do 
-            w' <- unsafeThaw (world gs)
-            writeArray w' p MetaTile {tile = FoodTile, visible = True}
-            return w'
+          nw = writeTile (world gs) p FoodTile
       in GameState nw (ants gs) fs' (startTime gs)
   | "w" `isPrefixOf` s = -- add water
       let p = toPoint.tail $ s
-          nw = runSTArray $ do
-            w' <- unsafeThaw (world gs)
-            writeArray w' p MetaTile {tile = Water, visible = True}
-            return w'
+          nw = writeTile (world gs) p Water
       in GameState nw (ants gs) (food gs) (startTime gs)
   | "a" `isPrefixOf` s = -- add ant
       let own = toOwner.digitToInt.last $ s
           p = toPoint.init.tail $ s
           as' = Ant { point = p, owner = own}:ants gs
-          nw = runSTArray $ do
-            w' <- unsafeThaw (world gs)
-            writeArray w' p MetaTile {tile = AntTile own, visible = True}
-            return w'
+          nw = writeTile (world gs) p $ AntTile own
           nw' = if own == Me then addVisible nw vp p else nw
       in GameState nw' as' (food gs) (startTime gs)
   | "d" `isPrefixOf` s = -- add dead ant
       let own = toOwner.digitToInt.last $ s
           p = toPoint.init.tail $ s
-          nw = runSTArray $ do
-            w' <- unsafeThaw (world gs)
-            writeArray w' p MetaTile {tile = Dead own, visible = True}
-            return w'
+          nw = writeTile (world gs) p $ Dead own
           nw' = if own == Me then addVisible nw vp p else nw
       in GameState nw' (ants gs) (food gs) (startTime gs)
   | otherwise = gs -- ignore line
   where
     toPoint :: String -> Point
     toPoint = tuplify2.map read.words
+    writeTile w p t = runSTArray $ do
+      w' <- unsafeThaw w
+      writeArray w' p MetaTile {tile = t, visible = True}
+      return w'
 
 initialWorld :: GameParams -> World
 initialWorld gp = listArray ((0,0), (rows gp - 1, cols gp - 1)) $ repeat MetaTile {tile = Unknown, visible = False}

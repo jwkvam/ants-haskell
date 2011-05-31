@@ -1,8 +1,5 @@
 Haskell starter bot for the 2011 Google AI Challenge - Ants
 
-NOTE: There is still huge memory leakage, I've been trying to minimize it.
-If you are good with Haskell and want to help, let me know.
-
 Reimplement the doTurn function in MyBot.hs, just don't change its signature.
 Look in Ants.hs to see what data is available from GameParams and GameState.
 
