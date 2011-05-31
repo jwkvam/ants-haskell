@@ -289,14 +289,14 @@ addVisible :: World
 addVisible w vp p = 
   runSTArray $ do 
     w' <- unsafeThaw w
-    mapM_ (setVisible w') $ map (sumPoint p) vp
+    mapM_ (setVisible w' . sumPoint p) vp
     return w'
 
 updateGameState :: [Point] -> GameState -> String -> GameState
 updateGameState vp gs s
   | "f" `isPrefixOf` s = -- add food
       let p = toPoint.tail $ s
-          fs' = p:(food gs)
+          fs' = p:food gs
           nw = runSTArray $ do 
             w' <- unsafeThaw (world gs)
             writeArray w' p MetaTile {tile = FoodTile, visible = True}
@@ -312,7 +312,7 @@ updateGameState vp gs s
   | "a" `isPrefixOf` s = -- add ant
       let own = toOwner.digitToInt.last $ s
           p = toPoint.init.tail $ s
-          as' = Ant { point = p, owner = own}:(ants gs)
+          as' = Ant { point = p, owner = own}:ants gs
           nw = runSTArray $ do
             w' <- unsafeThaw (world gs)
             writeArray w' p MetaTile {tile = AntTile own, visible = True}
@@ -358,6 +358,10 @@ createParams s =
                 , spawnCircle   = sp
                 }
 
+clearWorld :: World -> World
+{-clearWorld w = runSTArray $ unsafeThaw w >>= mapArray clearMetaTile-}
+clearWorld w = listArray (bounds w) (map clearMetaTile $ elems w)
+
 gameLoop :: GameParams 
          -> (GameState -> IO [Order])
          -> World
@@ -366,14 +370,13 @@ gameLoop :: GameParams
 gameLoop gp doTurn w (line:input)
   | "turn" `isPrefixOf` line = do
       hPutStrLn stderr line
-      let clearWorld = runSTArray $ unsafeThaw w >>= mapArray clearMetaTile
       time <- getCurrentTime
       let cs = break (isPrefixOf "go") input
-          gs = foldl' (updateGameState $ viewCircle gp) (GameState clearWorld [] [] time) (fst cs)
+          gs = foldl' (updateGameState $ viewCircle gp) (GameState w [] [] time) (fst cs)
       orders <- doTurn gs
       mapM_ issueOrder orders
       finishTurn
-      gameLoop gp doTurn (world gs) (tail $ snd cs)
+      gameLoop gp doTurn (clearWorld `seq` world gs) (tail $ snd cs)
   | "end" `isPrefixOf` line = endGame input
   | otherwise = gameLoop gp doTurn w input
 gameLoop _ _ _ [] = endGame []
