@@ -352,8 +352,7 @@ createParams s =
                 }
 
 clearWorld :: World -> World
-{-clearWorld w = runSTArray $ unsafeThaw w >>= mapArray clearMetaTile-}
-clearWorld w = listArray (bounds w) (map clearMetaTile $ elems w)
+clearWorld w = runSTArray $ unsafeThaw w >>= mapArray clearMetaTile
 
 gameLoop :: GameParams 
          -> (GameState -> IO [Order])
