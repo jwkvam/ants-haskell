@@ -64,12 +64,10 @@ data Tile = AntTile Owner
           | Unknown
           deriving (Show,Eq)
 
-type Visible = Bool
-
 -- | Elements of the world
 data MetaTile = MetaTile
   { tile :: Tile
-  , visible :: Visible
+  , visible :: Bool
   } deriving (Show)
 
 isAnt, isDead, isAntEnemy, isDeadEnemy :: Tile -> Bool
