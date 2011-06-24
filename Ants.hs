@@ -22,7 +22,6 @@ module Ants
 
 import Control.Applicative
 import Control.Monad.ST
-import Control.Monad (unless)
 
 import Data.Array
 import Data.Array.ST
@@ -278,8 +277,7 @@ setVisible :: MWorld s -> Point -> ST s ()
 setVisible mw p = do
   bnds <- getBounds mw
   let np = modPoint (incPoint $ snd bnds) p
-  mt <- readArray mw np
-  unless (visible mt) $ writeArray mw np $ visibleMetaTile `seq` mt
+  modifyWorld mw visibleMetaTile np
 
 addVisible :: World
            -> [Point] -- viewPoints
@@ -349,8 +347,19 @@ createParams s =
                 , spawnCircle   = sp
                 }
 
+modifyWorld :: MWorld s -> (MetaTile -> MetaTile) -> Point -> ST s ()
+modifyWorld mw f p = do
+  e' <- readArray mw p
+  e' `seq` writeArray mw p (f e') -- !IMPORTANT! seq is necessary to avoid space leaks
+
+mapWorld :: (MetaTile -> MetaTile) -> World -> World
+mapWorld f w = runSTArray $ do
+  mw <- unsafeThaw w
+  mapM_ (modifyWorld mw f) (indices w)
+  return mw
+
 clearWorld :: World -> World
-clearWorld w = runSTArray $ unsafeThaw w >>= mapArray clearMetaTile
+clearWorld w = mapWorld clearMetaTile w
 
 gameLoop :: GameParams 
          -> (GameState -> IO [Order])
@@ -366,7 +375,7 @@ gameLoop gp doTurn w (line:input)
       orders <- doTurn gs
       mapM_ issueOrder orders
       finishTurn
-      gameLoop gp doTurn (clearWorld `seq` world gs) (tail $ snd cs)
+      gameLoop gp doTurn (clearWorld $ world gs) (tail $ snd cs)
   | "end" `isPrefixOf` line = endGame input
   | otherwise = gameLoop gp doTurn w input
 gameLoop _ _ _ [] = endGame []
