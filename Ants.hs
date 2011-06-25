@@ -359,7 +359,7 @@ mapWorld f w = runSTArray $ do
   return mw
 
 clearWorld :: World -> World
-clearWorld w = mapWorld clearMetaTile w
+clearWorld = mapWorld clearMetaTile
 
 gameLoop :: GameParams 
          -> (GameState -> IO [Order])
