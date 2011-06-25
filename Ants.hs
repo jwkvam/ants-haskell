@@ -358,9 +358,6 @@ mapWorld f w = runSTArray $ do
   mapM_ (modifyWorld mw f) (indices w)
   return mw
 
-clearWorld :: World -> World
-clearWorld = mapWorld clearMetaTile
-
 gameLoop :: GameParams 
          -> (GameState -> IO [Order])
          -> World
@@ -375,7 +372,7 @@ gameLoop gp doTurn w (line:input)
       orders <- doTurn gs
       mapM_ issueOrder orders
       finishTurn
-      gameLoop gp doTurn (clearWorld $ world gs) (tail $ snd cs)
+      gameLoop gp doTurn (mapWorld clearMetaTile $ world gs) (tail $ snd cs) -- clear world for next turn
   | "end" `isPrefixOf` line = endGame input
   | otherwise = gameLoop gp doTurn w input
 gameLoop _ _ _ [] = endGame []
