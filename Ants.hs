@@ -311,8 +311,7 @@ updateGameState vp gs s
       let own = toOwner.digitToInt.last $ s
           p = toPoint.init.tail $ s
           nw = writeTile (world gs) p $ Dead own
-          nw' = if own == Me then addVisible nw vp p else nw
-      in GameState nw' (ants gs) (food gs) (startTime gs)
+      in GameState nw (ants gs) (food gs) (startTime gs)
   | otherwise = gs -- ignore line
   where
     toPoint :: String -> Point
