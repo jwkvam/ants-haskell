@@ -265,6 +265,7 @@ data GameParams = GameParams
   , rows :: Int
   , cols :: Int
   , turns :: Int
+  , playerSeed :: Int
   , viewradius2 :: Int
   , attackradius2 :: Int
   , spawnradius2 :: Int
@@ -338,6 +339,7 @@ createParams s =
                 , rows          = lookup' "rows"
                 , cols          = lookup' "cols"
                 , turns         = lookup' "turns"
+                , playerSeed    = lookup' "player_seed"
                 , viewradius2   = vr2
                 , attackradius2 = ar2
                 , spawnradius2  = sr2
