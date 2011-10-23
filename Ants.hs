@@ -57,6 +57,7 @@ col = snd
 --------------------------------------------------------------------------------
 data Tile = AntTile Owner
           | Dead Owner
+          | HillTile Owner
           | Land
           | FoodTile
           | Water
@@ -76,8 +77,14 @@ isAnt _ = False
 isDead (Dead _) = True
 isDead _ = False
 
+isHill (HillTile _) = True
+isHill _ = False
+
 isAntEnemy (AntTile (Enemy _)) = True
 isAntEnemy _ = False
+
+isHillEnemy (HillTile (Enemy _)) = True
+isHillEnemy _ = False
 
 isDeadEnemy (Dead (Enemy _)) = True
 isDeadEnemy _ = False
@@ -90,6 +97,8 @@ renderTile m
   | tile m == Dead Me = visibleUpper m 'd'
   | isDeadEnemy $ tile m = visibleUpper m 'd'
   | tile m == Land = visibleUpper m 'l'
+  | tile m == HillTile Me = visibleUpper m 'h'
+  | isHillEnemy $ tile m = visibleUpper m 'x'
   | tile m == FoodTile = visibleUpper m 'f'
   | tile m == Water = visibleUpper m 'w'
   | otherwise = "*"
@@ -195,17 +204,33 @@ getPointCircle r2 =
 data Owner = Me | Enemy Int deriving (Show,Eq)
 
 data Ant = Ant
-  { point :: Point
-  , owner :: Owner
+  { pointAnt :: Point
+  , ownerAnt :: Owner
   } deriving (Show)
 
 isMe, isEnemy :: Ant -> Bool
-isMe = (==Me).owner
+isMe = (==Me).ownerAnt
 isEnemy = not.isMe
 
 myAnts, enemyAnts :: [Ant] -> [Ant]
 myAnts = filter isMe
 enemyAnts = filter isEnemy
+
+--------------------------------------------------------------------------------
+-- Hills -----------------------------------------------------------------------
+--------------------------------------------------------------------------------
+data Hill = Hill
+  { pointHill :: Point
+  , ownerHill :: Owner
+  } deriving (Show)
+
+isMy, isEnemy's :: Hill -> Bool
+isMy = (==Me).ownerHill
+isEnemy's = not.isMy
+
+myHills, enemyHills :: [Hill] -> [Hill]
+myHills = filter isMy
+enemyHills = filter isEnemy's
 
 --------------------------------------------------------------------------------
 -- Orders ----------------------------------------------------------------------
@@ -232,13 +257,13 @@ move dir p
 
 passable :: World -> Order -> Bool
 passable w order =
-  let newPoint = move (direction order) (point $ ant order)
+  let newPoint = move (direction order) (pointAnt $ ant order)
   in  tile (w %! newPoint) /= Water
 
 issueOrder :: Order -> IO ()
 issueOrder order = do
-  let srow = (show . row . point . ant) order
-      scol = (show . col . point . ant) order
+  let srow = (show . row . pointAnt . ant) order
+      scol = (show . col . pointAnt . ant) order
       sdir = (show . direction) order
   putStrLn $ "o " ++ srow ++ " " ++ scol ++ " " ++ sdir
 
@@ -256,6 +281,7 @@ data GameState = GameState
   { world :: World
   , ants :: [Ant] -- call "ants GameState" to all ants
   , food :: [Food] -- call "food GameState" to all food
+  , hills :: [Hill] -- call "hills GameState" to all hills
   , startTime :: UTCTime
   }
 
@@ -296,23 +322,29 @@ updateGameState vp gs s
       let p = toPoint.tail $ s
           fs' = p:food gs
           nw = writeTile (world gs) p FoodTile
-      in GameState nw (ants gs) fs' (startTime gs)
+      in GameState nw (ants gs) fs' (hills gs) (startTime gs)
   | "w" `isPrefixOf` s = -- add water
       let p = toPoint.tail $ s
           nw = writeTile (world gs) p Water
-      in GameState nw (ants gs) (food gs) (startTime gs)
+      in GameState nw (ants gs) (food gs) (hills gs) (startTime gs)
+  | "h" `isPrefixOf` s = -- add hill
+      let p = toPoint.init.tail $ s
+          own = toOwner.digitToInt.last $ s
+          hs = Hill { pointHill = p, ownerHill = own}:hills gs
+          nw = writeTile (world gs) p $ HillTile own
+      in GameState nw (ants gs) (food gs) hs (startTime gs)
   | "a" `isPrefixOf` s = -- add ant
       let own = toOwner.digitToInt.last $ s
           p = toPoint.init.tail $ s
-          as' = Ant { point = p, owner = own}:ants gs
+          as' = Ant { pointAnt = p, ownerAnt = own}:ants gs
           nw = writeTile (world gs) p $ AntTile own
           nw' = if own == Me then addVisible nw vp p else nw
-      in GameState nw' as' (food gs) (startTime gs)
+      in GameState nw' as' (food gs) (hills gs) (startTime gs)
   | "d" `isPrefixOf` s = -- add dead ant
       let own = toOwner.digitToInt.last $ s
           p = toPoint.init.tail $ s
           nw = writeTile (world gs) p $ Dead own
-      in GameState nw (ants gs) (food gs) (startTime gs)
+      in GameState nw (ants gs) (food gs) (hills gs) (startTime gs)
   | otherwise = gs -- ignore line
   where
     toPoint :: String -> Point
@@ -369,7 +401,7 @@ gameLoop gp doTurn w (line:input)
       hPutStrLn stderr line
       time <- getCurrentTime
       let cs = break (isPrefixOf "go") input
-          gs = foldl' (updateGameState $ viewCircle gp) (GameState w [] [] time) (fst cs)
+          gs = foldl' (updateGameState $ viewCircle gp) (GameState w [] [] [] time) (fst cs)
       orders <- doTurn gs
       mapM_ issueOrder orders
       finishTurn
