@@ -4,7 +4,8 @@ Reimplement the doTurn function in MyBot.hs, just don't change its signature.
 Look in Ants.hs to see what data is available from GameParams and GameState.
 
 To compile, simply run from the command line
-> ghc --make -O MyBot
+> cabal configure --enable-tests (only once)
+> cabal build
 
 You may check for updates from the following repository.
 https://github.com/qacek/ants-haskell
