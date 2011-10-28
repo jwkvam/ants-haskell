@@ -1,4 +1,4 @@
-module Main where
+module MyBot where
 
 import Data.List
 import Data.Maybe (mapMaybe)
@@ -34,9 +34,3 @@ doTurn gp gs = do
   hPutStrLn stderr $ show elapsedTime
   -- wrap list of orders back into a monad
   return orders
-
--- | This runs the game
-main :: IO ()
-main = game doTurn
-
--- vim: set expandtab:

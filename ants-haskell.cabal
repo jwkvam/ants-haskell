@@ -1,0 +1,28 @@
+Name:               ants-haskell
+Version:            1.0
+Description:        Ants template
+Author:             Your name
+Maintainer:         your@mail.com
+Build-Type:         Simple
+Cabal-Version:      >=1.2
+executable MyBot
+  main-is:          MyBot.hs
+  ghc-options:      -O2
+  ghc-prof-options: -prof -caf-all -auto-all
+  Build-Depends:    base >= 4,
+                    containers >= 0.4,
+                    time,
+                    array
+
+test-suite test-ants
+    type:           exitcode-stdio-1.0
+    main-is:        Test.hs
+    hs-source-dirs: test .
+    ghc-options:    
+    build-depends:  base >= 4,
+                    QuickCheck >= 2.4,
+                    HUnit >= 1.0,
+                    test-framework >= 0.2,
+                    test-framework-quickcheck2 >= 0.2,
+                    test-framework-hunit >= 0.2
+
