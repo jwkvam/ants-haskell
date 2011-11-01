@@ -15,6 +15,7 @@ module Ants
 
     -- Utility functions
   , isDead
+  , isEnemy's
   , myAnts
   , enemyAnts
   , passable
@@ -220,7 +221,7 @@ data Owner = Me | Enemy Int deriving (Show,Eq,Ord)
 data Ant = Ant
   { pointAnt :: Point
   , ownerAnt :: Owner
-  } deriving (Show, Eq)
+  } deriving (Show, Eq, Ord)
 
 isMe, isEnemy :: Ant -> Bool
 isMe = (==Me).ownerAnt
