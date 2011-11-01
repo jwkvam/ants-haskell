@@ -6,7 +6,7 @@ Maintainer:         your@mail.com
 Build-Type:         Simple
 Cabal-Version:      >=1.2
 executable MyBot
-  main-is:          Main.hs
+  main-is:          MyBot.hs
   ghc-options:      -O2
   ghc-prof-options: -prof -caf-all -auto-all
   Build-Depends:    base >= 4,
