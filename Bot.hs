@@ -1,6 +1,7 @@
 module Bot where
 
 import Data.List
+import qualified Data.Map as M
 import Data.Maybe (mapMaybe)
 import System.IO
 
@@ -14,6 +15,20 @@ tryOrder w = find (passable w)
 -- | Generates orders for an Ant in all directions
 generateOrders :: Ant -> [Order]
 generateOrders a = map (Order a) [North .. West]
+
+
+-- | Avoid Collitions
+-- Whe get the set of destinations and generating Order
+filterCollidingOrders :: World -> [[Order]] -> [Order]
+filterCollidingOrders w orders = M.elems theMap
+    where
+        theMap = foldl' insertIfNotInMap M.empty orders
+        insertIfNotInMap :: M.Map Point Order -> [Order] -> M.Map Point Order
+        insertIfNotInMap m [] = m
+        insertIfNotInMap m (o:os) = case M.lookup (destination w o) m of
+            Just _ -> insertIfNotInMap m os
+            Nothing -> M.insert (destination w o) o m
+
 
 {- |
  - Implement this function to create orders.

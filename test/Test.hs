@@ -1,5 +1,3 @@
-module Test where
-
 import Test.Framework (defaultMain, testGroup, Test)
 import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.Framework.Providers.HUnit (testCase)
@@ -7,20 +5,58 @@ import Test.Framework.Providers.HUnit (testCase)
 import Test.QuickCheck
 import Test.HUnit
 
+import Data.Time.Clock
+import Data.Time.Calendar
+
+import Ants
 import Bot
 
 tests = [
         testGroup "cases" $ zipWith (testCase . show) [1::Int ..] $
             [ 
-            case_AlwaysTrue
+            case_NotRepeatedPositions
+            , case_AlwaysRazeEnemyHill
             ]
         , testGroup "properties" $ zipWith (testProperty . show) [1::Int ..] $
             [ property True]
         ]
         
 --------------------------------------------------
-case_AlwaysTrue = assertEqual "Create expected functionality" expected obtained
+-- | Simple game params used in conjunction with the example map
+gameParams = createParams [ 
+        ("loadtime","3000"),
+        ("turntime","1000"),
+        ("rows","43"),
+        ("cols","39"),
+        ("turns","60"),
+        ("player_seed","7"),
+        ("viewradius2","77"),
+        ("attackradius2","5"),
+        ("spawnradius2","1")
+    ]
+createGameState = foldl updateGame initialState  
+    where
+        updateGame = (updateGameState $ viewCircle gameParams) 
+        fakeDate = UTCTime (ModifiedJulianDay 0) 0
+        initialState = (GameState (initialWorld gameParams) [] [] [] fakeDate) 
+
+--------------------------------------------------
+case_NotRepeatedPositions = assertEqual "Only one order should be generated" orders [orderA]
+    where
+        orders = filterCollidingOrders (initialWorld gameParams) [[orderA], [orderB]]    
+        antA = Ant (0,0) Me 
+        antB = Ant (2,0) Me
+        orderA = Order antA South
+        orderB = Order antB North
+
+
+--------------------------------------------------
+-- The only move allowed is to raze the contiguous enemy ant hill
+case_AlwaysRazeEnemyHill = 
+    assertEqual "Enemy Hill was not razed" expected obtained
     where 
+        setup = ["a 15 15 0","h 15 14 1"]
+        gs = createGameState setup
         expected = True
         obtained = True
        

@@ -3,6 +3,8 @@
 *.py
 *.zip
 *.txt
+*.swp
 MyBot
 tags
 dist
+game_logs
