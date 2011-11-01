@@ -5,6 +5,7 @@ import qualified Data.Map as M
 import Data.Maybe (mapMaybe)
 import System.IO
 import Data.Function
+import Data.Tuple
 
 import Debug.Trace
 
@@ -42,24 +43,40 @@ getDirections gp (x1,y1) (x2,y2) =
 
 -- | Generates orders for an Ants looking for food
 generateOrders :: GameParams -> GameState -> [[Order]]
-generateOrders gp gs = map allDirections $ myAnts $ ants gs
+generateOrders gp gs = map antDirections $ myAnts $ ants gs
     where
+        -- | A set of targets and a set of ants, assign each ant to the closest target
+        assignClosestTarget :: [Point] -> [Ant] -> [(Ant, Point)]
+        assignClosestTarget points ants = map snd $ sortBy (compare `on` fst) [(distance gp (pointAnt a) p,(a,p)) | a <- ants, p <- points]
+
+        -- | Calculate distances to important targets
+        distsEnemyHills, distsToFood :: [(Ant,Point)]
+        -- Send against the hills the ants that are not gathering food
+        distsEnemyHills = assignClosestTarget enemyHills [ant | ant <- ownAnts, notElem ant (M.elems foodTargets)]
+        distsToFood = assignClosestTarget (food gs) ownAnts
+
+        -- | Assign a target to an ant
+        hillsTargets, foodTargets :: M.Map Point Ant
         foodTargets = foldl' accMap M.empty distsToFood
             where
-                accMap = \m (a,f) -> M.insertWith (flip const) a (getDirections gp (pointAnt a) f) m 
+--                accMap = \m (a,f) -> M.insertWith (flip const) a (getDirections gp (pointAnt a) f) m 
+                -- Select only one ant per target
+                accMap = \m (a,f) -> M.insertWith (flip const) f a m 
 
         hillsTargets = foldl' accMap M.empty distsEnemyHills
             where
-                accMap = \m (a,h) -> M.insertWith (flip const) a (getDirections gp (pointAnt a) h) m 
+                accMap = \m (a,h) -> M.insertWith (flip const) h a m 
 
 
-        distsEnemyHills = map snd $ sortBy (compare `on`fst) [(distance gp (pointAnt a) f,(a,f)) | a <- myAnts $ ants gs, f <- map pointHill $ filter isEnemy's $ hills gs]
-        distsToFood = map snd $ sortBy (compare `on`fst) [(distance gp (pointAnt a) f,(a,f)) | a <- myAnts $ ants gs, f <- food gs]
-        allDirections a = map (Order a) $ trace (show antDirections) (antDirections ++ [x | x <- [North .. West], notElem x antDirections])
+        -- | Helpful synomims
+        ownAnts = myAnts $ ants gs
+        enemyHills = map pointHill $ filter isEnemy's $ hills gs
+
+        antDirections a = map (Order a) (direcs ++ [x | x <- [North .. West], notElem x direcs])
              where
-                dirsEnemyHills = M.findWithDefault [] a hillsTargets
-                dirsFood = M.findWithDefault [] a foodTargets
-                antDirections = trace (show dirsEnemyHills) (dirsEnemyHills++dirsFood)
+                  targets :: M.Map Ant [Direction]
+                  targets = M.map (getDirections gp (pointAnt a)) $ M.fromList $ map swap $ M.toList $ M.union foodTargets hillsTargets
+                  direcs = M.findWithDefault [] a targets 
 
 -- | Avoid Collitions
 -- Whe get the set of destinations and generating Order
