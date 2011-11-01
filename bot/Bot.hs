@@ -5,7 +5,6 @@ import qualified Data.Map as M
 import Data.Maybe (mapMaybe)
 import System.IO
 import Data.Function
-import Data.Tuple
 
 import Debug.Trace
 
@@ -117,3 +116,6 @@ doTurn gp gs = do
   hPutStrLn stderr $ show elapsedTime
   -- wrap list of orders back into a monad
   return (filterCollidingOrders (world gs) orders)
+
+-- | Utils
+swap (a,b) = (b,a)
