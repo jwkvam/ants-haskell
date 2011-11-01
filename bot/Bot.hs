@@ -7,16 +7,12 @@ import System.IO
 
 import Ants
 
--- | Picks the first "passable" order in a list
--- returns Nothing if no such order exists
-tryOrder :: World -> [Order] -> Maybe Order
-tryOrder w = find (passable w)
-
 -- | Generates orders for an Ant in all directions
-generateOrders :: Ant -> [Order]
-generateOrders a = map (Order a) [North .. West]
-
-
+generateOrders :: GameParams -> GameState -> [[Order]]
+generateOrders gp gs = map directions $ myAnts $ ants gs 
+    where
+        directions a = map (Order a) [North .. West]
+ 
 -- | Avoid Collitions
 -- Whe get the set of destinations and generating Order
 filterCollidingOrders :: World -> [[Order]] -> [Order]
@@ -30,6 +26,15 @@ filterCollidingOrders w orders = M.elems theMap
             Nothing -> M.insert (destination w o) o m
 
 
+isDestinationPassable :: World -> Order -> Bool
+isDestinationPassable w o = pos `elem` [Land, Unknown] || isDead pos || isEnemyHill pos
+    where
+        newPoint = destination w o
+        pos = (tile (w %! newPoint))
+
+        isEnemyHill (HillTile owner) = owner /= Me
+        isEnemyHill _ = False
+
 {- |
  - Implement this function to create orders.
  - It uses the IO Monad so algorithms can call timeRemaining.
@@ -41,11 +46,9 @@ filterCollidingOrders w orders = M.elems theMap
 doTurn :: GameParams -> GameState -> IO [Order]
 doTurn gp gs = do
   -- generate orders for all ants belonging to me
-  let generatedOrders = map generateOrders $ myAnts $ ants gs
-  -- for each ant take the first "passable" order, if one exists
-      orders = mapMaybe (tryOrder (world gs)) generatedOrders
+  let orders = map (filter (isDestinationPassable (world gs))) (generateOrders gp gs)
   -- this shows how to check the remaining time
   elapsedTime <- timeRemaining gs
   hPutStrLn stderr $ show elapsedTime
   -- wrap list of orders back into a monad
-  return orders
+  return (filterCollidingOrders (world gs) orders)

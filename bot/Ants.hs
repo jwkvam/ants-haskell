@@ -3,6 +3,9 @@ module Ants
     -- Data structures
     Owner (..)
   , Ant (..)
+  , Tile (..)
+  , MetaTile (..)
+  , Hill (..)
   , Direction (..)
   , GameParams (..)
   , GameState (..)
@@ -11,12 +14,16 @@ module Ants
   , Point
 
     -- Utility functions
+  , isDead
   , myAnts
   , enemyAnts
   , passable
   , distance
   , timeRemaining
   , destination
+  , (%!)
+  , (%!%)
+
 
   -- World creation and querying
   , createParams

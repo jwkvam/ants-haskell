@@ -4,15 +4,24 @@ Description:        Ants template
 Author:             Your name
 Maintainer:         your@mail.com
 Build-Type:         Simple
-Cabal-Version:      >=1.2
+Cabal-Version:      >=1.8
+
+library
+  exposed-modules:  Ants, Bot, Util
+  hs-source-dirs:   bot
+  ghc-options:      -O2
+  ghc-prof-options: -prof -caf-all -auto-all
+  build-depends:    base >= 4,
+                    containers >= 0.4,
+                    time,
+                    array
+
 executable MyBot
   main-is:          MyBot.hs
   ghc-options:      -O2
   ghc-prof-options: -prof -caf-all -auto-all
   Build-Depends:    base >= 4,
-                    containers >= 0.4,
-                    time,
-                    array
+                    ants-haskell
 
 test-suite test-ants
     type:           exitcode-stdio-1.0
@@ -24,5 +33,7 @@ test-suite test-ants
                     HUnit >= 1.0,
                     test-framework >= 0.2,
                     test-framework-quickcheck2 >= 0.2,
-                    test-framework-hunit >= 0.2
+                    test-framework-hunit >= 0.2,
+                    time,
+                    ants-haskell
 

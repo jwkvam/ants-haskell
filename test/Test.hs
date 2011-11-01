@@ -8,6 +8,8 @@ import Test.HUnit
 import Data.Time.Clock
 import Data.Time.Calendar
 
+import Debug.Trace
+
 import Ants
 import Bot
 
@@ -16,6 +18,7 @@ tests = [
             [ 
             case_NotRepeatedPositions
             , case_AlwaysRazeEnemyHill
+            , case_testUniccupied
             ]
         , testGroup "properties" $ zipWith (testProperty . show) [1::Int ..] $
             [ property True]
@@ -41,6 +44,15 @@ createGameState = foldl updateGame initialState
         initialState = (GameState (initialWorld gameParams) [] [] [] fakeDate) 
 
 --------------------------------------------------
+case_testUniccupied = assertBool "Not detecting an unoccupied tile" expected
+    where
+        setup = ["a 15 15 0","h 15 14 1","w 16 15","w 14 15","w 15 16"]
+        gs = createGameState setup
+        theAnt = (head . ants) gs
+        order = Order theAnt West
+        expected = isDestinationPassable (world gs) order
+
+--------------------------------------------------
 case_NotRepeatedPositions = assertEqual "Only one order should be generated" orders [orderA]
     where
         orders = filterCollidingOrders (initialWorld gameParams) [[orderA], [orderB]]    
@@ -48,7 +60,6 @@ case_NotRepeatedPositions = assertEqual "Only one order should be generated" ord
         antB = Ant (2,0) Me
         orderA = Order antA South
         orderB = Order antB North
-
 
 --------------------------------------------------
 -- The only move allowed is to raze the contiguous enemy ant hill
