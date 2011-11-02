@@ -3,18 +3,33 @@ module Ants
     -- Data structures
     Owner (..)
   , Ant (..)
+  , Tile (..)
+  , MetaTile (..)
+  , Hill (..)
   , Direction (..)
   , GameParams (..)
   , GameState (..)
   , Order (..)
   , World
+  , Point
 
     -- Utility functions
+  , isDead
+  , isEnemy's
   , myAnts
   , enemyAnts
   , passable
   , distance
   , timeRemaining
+  , destination
+  , (%!)
+  , (%!%)
+
+
+  -- World creation and querying
+  , createParams
+  , updateGameState
+  , initialWorld
 
     -- main function
   , game
@@ -201,12 +216,12 @@ getPointCircle r2 =
 --------------------------------------------------------------------------------
 -- Ants ------------------------------------------------------------------------
 --------------------------------------------------------------------------------
-data Owner = Me | Enemy Int deriving (Show,Eq)
+data Owner = Me | Enemy Int deriving (Show,Eq,Ord)
 
 data Ant = Ant
   { pointAnt :: Point
   , ownerAnt :: Owner
-  } deriving (Show)
+  } deriving (Show, Eq, Ord)
 
 isMe, isEnemy :: Ant -> Bool
 isMe = (==Me).ownerAnt
@@ -246,7 +261,14 @@ instance Show Direction where
 data Order = Order
   { ant :: Ant
   , direction :: Direction
-  } deriving (Show)
+  } deriving (Show,Eq)
+
+-- | Gets the point destination of a given order
+destination :: World -> Order -> Point 
+destination w o = w %!% newPoint
+    where 
+     newPoint = move (direction o) (pointAnt theAnt)
+     theAnt = ant o
 
 move :: Direction -> Point -> Point
 move dir p
